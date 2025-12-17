@@ -1,36 +1,44 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Switch, Alert } from 'react-native';
-import { User } from '@/types/user';
-import { api } from '@/lib/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, Switch, Alert, TextInput, TouchableOpacity } from 'react-native';
+import { User } from '../../types/user';
+import { fetchAllUsers, updateUser } from './api'; // Using the new admin API
+import { Link } from 'expo-router';
 
 export default function AdminScreen() {
   const [users, setUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const loadUsers = async () => {
+    try {
+      const fetchedUsers = await fetchAllUsers();
+      setUsers(fetchedUsers);
+    } catch (error) {
+      Alert.alert('Error', 'Could not fetch users.');
+    }
+  };
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const fetchedUsers = await api.fetchAllUsers();
-        setUsers(fetchedUsers);
-      } catch (error) {
-        Alert.alert('Error', 'Could not fetch users.');
-      }
-    };
-    fetchUsers();
+    loadUsers();
   }, []);
 
   const handleToggle = async (userId: string, field: keyof User, value: boolean) => {
     try {
-      await api.updateUser(userId, { [field]: value });
-      setUsers(prevUsers =>
-        prevUsers.map(user =>
-          user.id === userId ? { ...user, [field]: value } : user
-        )
-      );
+      await updateUser(userId, { [field]: value });
+      // Refresh the list to show the updated status
+      loadUsers();
     } catch (error) {
       Alert.alert('Error', `Could not update user ${userId}.`);
     }
   };
+
+  const filteredUsers = useMemo(() => {
+      if (!searchTerm) return users;
+      return users.filter(user => 
+          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.username.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [users, searchTerm]);
 
   const renderItem = ({ item }: { item: User }) => (
     <View style={styles.userContainer}>
@@ -67,14 +75,32 @@ export default function AdminScreen() {
             onValueChange={value => handleToggle(item.id, 'is_suspended', value)}
           />
         </View>
+        <View style={styles.toggleRow}>
+          <Text>Muted</Text>
+          <Switch
+            value={item.is_muted}
+            onValueChange={value => handleToggle(item.id, 'is_muted', value)}
+          />
+        </View>
       </View>
+      <Link href={`/admin/user/${item.id}`} asChild>
+          <TouchableOpacity style={styles.detailsButton}>
+              <Text style={styles.buttonText}>View Details</Text>
+          </TouchableOpacity>
+      </Link>
     </View>
   );
 
   return (
     <View style={styles.container}>
+        <TextInput 
+            style={styles.searchBar}
+            placeholder="Search by name or username..."
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+        />
       <FlatList
-        data={users}
+        data={filteredUsers}
         renderItem={renderItem}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
@@ -91,16 +117,18 @@ const styles = StyleSheet.create({
   list: {
     padding: 10,
   },
+  searchBar: {
+      backgroundColor: 'white',
+      padding: 15,
+      margin: 10,
+      borderRadius: 10,
+      fontSize: 16,
+  },
   userContainer: {
     backgroundColor: 'white',
     padding: 15,
     borderRadius: 10,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
   },
   userInfo: {
     marginBottom: 10,
@@ -122,4 +150,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 5,
   },
+  detailsButton: {
+      backgroundColor: '#007bff',
+      padding: 10,
+      borderRadius: 5,
+      marginTop: 10,
+  },
+  buttonText: {
+      color: 'white',
+      textAlign: 'center',
+  }
 });
