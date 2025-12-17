@@ -31,7 +31,7 @@ export default function Button({ text, onPress, variant = 'primary', loading = f
             backgroundColor: theme.error,
           },
           text: {
-            color: 'white',
+            color: theme.textInverse,
           },
         };
       default: // primary
@@ -40,7 +40,7 @@ export default function Button({ text, onPress, variant = 'primary', loading = f
             backgroundColor: theme.primary,
           },
           text: {
-            color: 'white', // Keeping white for primary button contrast
+            color: theme.textInverse,
           },
         };
     }

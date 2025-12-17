@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { User } from '@/types/user';
+import { useTheme } from '@/theme/theme';
 
 interface ProfileHeaderProps {
   user: User;
@@ -9,14 +10,16 @@ interface ProfileHeaderProps {
 }
 
 export default function ProfileHeader({ user, action }: ProfileHeaderProps) {
+  const { theme } = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { borderBottomColor: theme.borderLight, backgroundColor: theme.background }]}>
       <Image source={{ uri: user.headerImage }} style={styles.headerImage} />
-      <Image source={{ uri: user.avatar }} style={styles.avatar} />
+      <Image source={{ uri: user.avatar }} style={[styles.avatar, { borderColor: theme.background }]} />
       <View style={styles.userInfo}>
         <View style={styles.userDetails}>
-          <Text style={styles.displayName}>{user.name}</Text>
-          <Text style={styles.username}>@{user.username}</Text>
+          <Text style={[styles.displayName, { color: theme.textPrimary }]}>{user.name}</Text>
+          <Text style={[styles.username, { color: theme.textSecondary }]}>@{user.username}</Text>
         </View>
         <View style={styles.actionContainer}>
           {action}
@@ -29,7 +32,6 @@ export default function ProfileHeader({ user, action }: ProfileHeaderProps) {
 const styles = StyleSheet.create({
   container: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E1E8ED',
   },
   headerImage: {
     width: '100%',
@@ -40,7 +42,6 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 3,
-    borderColor: '#fff',
     marginTop: -40,
     marginLeft: 15,
   },
@@ -66,6 +67,5 @@ const styles = StyleSheet.create({
   },
   username: {
     fontSize: 16,
-    color: '#666',
   },
 });

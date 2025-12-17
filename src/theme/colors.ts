@@ -7,7 +7,7 @@
 export const twitterColors = {
   // Twitter Blue variations (primary brand color)
   blue: {
-    50: '#E8F4FD',
+    50:  '#E8F4FD',
     100: '#D1E9FA',
     200: '#A3D3F5',
     300: '#75BCF0',
@@ -25,7 +25,7 @@ export const twitterColors = {
   
   // Twitter Gray scale
   gray: {
-    50: '#F7F9F9',
+    50:  '#F7F9F9',
     100: '#EFF3F4',
     200: '#E7ECED',
     300: '#CFD9DE',

@@ -1,9 +1,9 @@
 
 // This file will abstract all Supabase calls.
 // It will be extended with function stubs for now.
-import { Post, ReactionAction } from "@/types/post";
+import { Post, ReactionAction, Comment } from "@/types/post";
 import { PollChoice } from "@/types/poll";
-import { User } from "@/types/user";
+import { User, UserProfile } from "@/types/user";
 import { Report, ReportableEntityType, ReportType } from "@/types/reports";
 import { createReport as createReportApi } from './reportsApi';
 
@@ -34,7 +34,7 @@ const allUsers: User[] = [
 const userMap = new Map(allUsers.map(user => [user.id, user]));
 
 const allPosts: Post[] = [
-  { id: '7', repostedBy: userMap.get('9')!, author: userMap.get('1')!, content: 'This is the first post! So excited to be here. #newbeginnings', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(), likeCount: 10, dislikeCount: 1, laughCount: 0, repostCount: 5, commentCount: 2, userReaction: 'NONE', comments: [ { id: 'c1', author: userMap.get('10')!, content: 'Welcome! Great to have you here.', createdAt: new Date(Date.now() - 1000 * 60 * 55).toISOString(), replies: [ { id: 'r1', author: userMap.get('1')!, content: 'Thanks, Grace!', createdAt: new Date(Date.now() - 1000 * 60 * 50).toISOString(), }, ], }, { id: 'c2', author: userMap.get('11')!, content: 'Looking forward to your posts!', createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(), replies: [], }, ], },
+  { id: '7', repostedBy: userMap.get('9')!, author: userMap.get('1')!, content: 'This is the first post! So excited to be here. #newbeginnings', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(), likeCount: 10, dislikeCount: 1, laughCount: 0, repostCount: 5, commentCount: 2, userReaction: 'NONE', comments: [ { id: 'c1', author: userMap.get('10')!, content: 'Welcome! Great to have you here.', createdAt: new Date(Date.now() - 1000 * 60 * 55).toISOString(), likeCount: 0, dislikeCount: 0, laughCount: 0, repostCount: 0, commentCount: 1, userReaction: 'NONE', replies: [ { id: 'r1', author: userMap.get('1')!, content: 'Thanks, Grace!', createdAt: new Date(Date.now() - 1000 * 60 * 50).toISOString(), likeCount: 0, dislikeCount: 0, laughCount: 0, repostCount: 0, commentCount: 0, userReaction: 'NONE' }, ], }, { id: 'c2', author: userMap.get('11')!, content: 'Looking forward to your posts!', createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(), likeCount: 0, dislikeCount: 0, laughCount: 0, repostCount: 0, commentCount: 0, userReaction: 'NONE', replies: [], }, ], },
   { id: '8', author: userMap.get('12')!, content: 'This is a great point. I would also add...', quotedPost: { id: '1', author: userMap.get('1')!, content: 'This is the first post! So excited to be here. #newbeginnings', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), likeCount: 10, dislikeCount: 1, laughCount: 0, repostCount: 5, commentCount: 2, userReaction: 'NONE', }, createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(), likeCount: 15, dislikeCount: 0, laughCount: 0, repostCount: 3, commentCount: 4, userReaction: 'LIKE', },
   { id: '1', author: userMap.get('1')!, content: 'This is the first post! So excited to be here. #newbeginnings', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), likeCount: 10, dislikeCount: 1, laughCount: 0, repostCount: 5, commentCount: 2, userReaction: 'NONE', },
   { id: '2', author: userMap.get('2')!, content: 'Hello world! This is a great day. Just enjoying the weather.', createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(), likeCount: 25, dislikeCount: 0, laughCount: 0, repostCount: 12, commentCount: 8, userReaction: 'LIKE', },
@@ -43,7 +43,6 @@ const allPosts: Post[] = [
   { id: '5', author: userMap.get('5')!, content: 'Is anyone else watching the new season of that show? No spoilers!', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), likeCount: 80, dislikeCount: 3, laughCount: 0, repostCount: 10, commentCount: 25, userReaction: 'NONE', },
   { id: '6', author: userMap.get('6')!, content: 'Just finished a marathon. Feeling tired but accomplished. #running', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), likeCount: 200, dislikeCount: 10, laughCount: 0, repostCount: 50, commentCount: 40, userReaction: 'LIKE', },
 ];
-
 
 export const api = {
   createPost: async (post: { content: string }): Promise<Post> => {
@@ -99,8 +98,6 @@ export const api = {
       const author = userMap.get(post.author.id);
       if (!author) return false;
 
-      // Shadow-banned posts are invisible to others, but visible to the author.
-      // For this mock API, we'll assume the current user is not the author of shadow-banned posts.
       if (author.is_shadow_banned) return false;
 
       return (
@@ -120,7 +117,6 @@ export const api = {
     };
   },
 
-
   fetchPost: async (postId: string): Promise<Post | undefined> => {
     console.log(`Fetching post with id: ${postId}`);
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -135,6 +131,31 @@ export const api = {
       return undefined;
     }
     return post;
+  },
+
+  getProfile: async (userId: string): Promise<UserProfile> => {
+      const user = userMap.get(userId);
+      if(!user) throw new Error("User not found");
+      return user;
+  },
+
+  getProfileByUsername: async (username: string): Promise<UserProfile> => {
+    const user = allUsers.find(u => u.username === username);
+    if(!user) throw new Error("User not found");
+    return user;
+  },
+
+  getPostsByUser: async (userId: string): Promise<Post[]> => {
+    return allPosts.filter(p => p.author.id === userId);
+  },
+
+  updateProfile: async (updates: Partial<UserProfile>): Promise<void> => {
+    console.log('Updating profile with', updates);
+    const currentUser = userMap.get('0');
+    if (currentUser) {
+        Object.assign(currentUser, updates);
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
   },
 
   muteUser: async (userId: string): Promise<void> => {

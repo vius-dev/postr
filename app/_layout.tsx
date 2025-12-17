@@ -1,3 +1,4 @@
+
 import { Stack } from 'expo-router';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { realtimeCoordinator } from '@/realtime/RealtimeCoordinator';
 import { RealtimeProvider } from '@/realtime/RealtimeContext';
 import { useAuthStore } from '@/state/auth';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { AuthProvider } from '@/providers/AuthProvider';
 
 
 export default function AppLayout() {
@@ -59,29 +61,32 @@ export default function AppLayout() {
   */
 
   return (
-    <RealtimeProvider>
-      <SafeAreaProvider>
-        <Stack
-          screenOptions={{
-            headerStyle: {
-              backgroundColor: theme.background,
-            },
-            headerTintColor: theme.text,
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
-          <Stack.Screen
-            name="(compose)/compose"
-            options={{
-              title: 'Compose',
-              presentation: 'modal',
+    <AuthProvider>
+      <RealtimeProvider>
+        <SafeAreaProvider>
+          <Stack
+            screenOptions={{
+              headerStyle: {
+                backgroundColor: theme.background,
+              },
+              headerTintColor: theme.text,
             }}
-          />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        </Stack>
-      </SafeAreaProvider>
-    </RealtimeProvider>
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(profile)" options={{ headerShown: false }} />
+            <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
+            <Stack.Screen
+              name="(compose)/compose"
+              options={{
+                title: 'Compose',
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          </Stack>
+        </SafeAreaProvider>
+      </RealtimeProvider>
+    </AuthProvider>
   );
 }
 

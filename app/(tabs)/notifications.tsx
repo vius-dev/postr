@@ -2,13 +2,15 @@ import React from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
+import HomeHeader from '@/components/HomeHeader';
 
 export default function NotificationsScreen() {
   const { theme } = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      <Text style={{ color: theme.textPrimary }}>Notifications Screen</Text>
+      <HomeHeader />
+      <Text style={{ color: theme.textPrimary, flex: 1, textAlignVertical: 'center' }}>Notifications Screen</Text>
     </SafeAreaView>
   );
 }
@@ -16,7 +18,6 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
   },
 });

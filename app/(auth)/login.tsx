@@ -71,7 +71,7 @@ export default function LoginScreen() {
               onPress={handleLogin}
               style={[styles.loginButton, { backgroundColor: theme.primary }]}
             >
-              <Text style={styles.loginButtonText}>Log in</Text>
+              <Text style={[styles.loginButtonText, { color: theme.textInverse }]}>Log in</Text>
             </TouchableOpacity>
 
             <View style={styles.footerLinks}>
@@ -131,7 +131,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   loginButtonText: {
-    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },

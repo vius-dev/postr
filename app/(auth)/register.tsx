@@ -86,7 +86,7 @@ export default function RegisterScreen() {
               onPress={handleRegister}
               style={[styles.registerButton, { backgroundColor: theme.primary }]}
             >
-              <Text style={styles.registerButtonText}>Sign up</Text>
+              <Text style={[styles.registerButtonText, { color: theme.textInverse }]}>Sign up</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push('/login')} style={styles.loginLink}>
@@ -140,7 +140,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   registerButtonText: {
-    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },

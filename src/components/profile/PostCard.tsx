@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
 import { Post, ReactionAction } from '@/types/post';
 import ReactionBar from '../ReactionBar';
 import { api } from '@/lib/api';
+import { useRouter } from 'expo-router';
 
 interface PostCardProps {
   post: Post;
@@ -11,6 +12,7 @@ interface PostCardProps {
 
 export default function PostCard({ post: initialPost }: PostCardProps) {
   const [post, setPost] = useState(initialPost);
+  const router = useRouter();
 
   const handleReaction = async (action: ReactionAction) => {
     const originalPost = post;
@@ -32,19 +34,37 @@ export default function PostCard({ post: initialPost }: PostCardProps) {
     console.log('Repost post');
   };
 
+  const goToProfile = () => {
+    router.push(`/profile/${post.author.id}`);
+  };
+
+  const goToPost = () => {
+    router.push(`/post/${post.id}`);
+  };
+
   return (
     <View style={styles.container}>
-      <Image source={{ uri: post.author.avatar }} style={styles.avatar} />
+      <Pressable onPress={goToProfile}>
+        <Image source={{ uri: post.author.avatar }} style={styles.avatar} />
+      </Pressable>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.displayName}>{post.author.name}</Text>
-          <Text style={styles.username}>@{post.author.username}</Text>
-          <Text style={styles.timestamp}>· {post.createdAt}</Text>
+          <Pressable onPress={goToProfile}>
+            <View style={styles.nameGroup}>
+              <Text style={styles.displayName}>{post.author.name}</Text>
+              <Text style={styles.username}>@{post.author.username}</Text>
+            </View>
+          </Pressable>
+          <Pressable onPress={goToPost}>
+            <Text style={styles.timestamp}>· {post.createdAt}</Text>
+          </Pressable>
         </View>
-        <Text style={styles.text}>{post.content}</Text>
-        {post.media && post.media.length > 0 && (
-          <Image source={{ uri: post.media[0].url }} style={styles.media} />
-        )}
+        <Pressable onPress={goToPost}>
+          <Text style={styles.text}>{post.content}</Text>
+          {post.media && post.media.length > 0 && (
+            <Image source={{ uri: post.media[0].url }} style={styles.media} />
+          )}
+        </Pressable>
         <ReactionBar
           postId={post.id}
           onComment={handleComment}
@@ -84,6 +104,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 5,
+  },
+  nameGroup: {
+    flexDirection: 'row',
+    marginRight: 5,
   },
   displayName: {
     fontWeight: 'bold',

@@ -6,6 +6,7 @@ import FeedList from '@/components/FeedList';
 import FAB from '@/components/FAB';
 import { Post } from '@/types/post';
 import { useTheme } from '@/theme/theme';
+import HomeHeader from '@/components/HomeHeader';
 
 export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -52,6 +53,7 @@ export default function FeedScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <HomeHeader />
       <FeedList
         posts={posts}
         onRefresh={handleRefresh}

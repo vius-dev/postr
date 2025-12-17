@@ -12,6 +12,12 @@ export type Media = {
 };
 
 export type Comment = {
+    userReaction: ReactionAction;
+    likeCount: number;
+    dislikeCount: number;
+    laughCount: number;
+    repostCount: number;
+    commentCount: number;
     id: string;
     author: Author;
     content: string;

@@ -9,33 +9,33 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   TouchableOpacity,
   Image,
+  ScrollView,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { api } from '@/lib/api';
 
 const MAX_CHARACTERS = 280;
 
-const ComposeScreen = () => {
+const ReplyComposerScreen = () => {
   const { theme } = useTheme();
   const router = useRouter();
+  const { authorUsername } = useLocalSearchParams();
   const [text, setText] = useState('');
   const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([]);
 
   const characterCount = text.length;
-  const isPostButtonDisabled = characterCount === 0 || characterCount > MAX_CHARACTERS;
+  const isReplyButtonDisabled = characterCount === 0 || characterCount > MAX_CHARACTERS;
 
   const handleCancel = () => {
     if (text.length > 0 || media.length > 0) {
       Alert.alert(
-        'Discard post?',
-        'Your post will be lost.',
+        'Discard reply?',
+        'Your reply will be lost.',
         [
           { text: 'Keep editing', style: 'cancel' },
           { text: 'Discard', style: 'destructive', onPress: () => router.back() },
@@ -47,13 +47,8 @@ const ComposeScreen = () => {
     }
   };
 
-  const handlePost = async () => {
-    try {
-      await api.createPost({ content: text });
-      router.back();
-    } catch (error) {
-      console.error('Failed to create post', error);
-    }
+  const handleReply = () => {
+    router.back();
   };
 
   const handlePickImage = async () => {
@@ -121,23 +116,28 @@ const ComposeScreen = () => {
         <Pressable onPress={handleCancel}>
           <Text style={[styles.headerButton, { color: theme.link }]}>Cancel</Text>
         </Pressable>
-        <Pressable onPress={handlePost} disabled={isPostButtonDisabled}>
-          <Text style={[styles.postButton, { color: isPostButtonDisabled ? theme.textTertiary : theme.link }]}>Post</Text>
+        <Pressable onPress={handleReply} disabled={isReplyButtonDisabled}>
+          <Text style={[styles.replyButton, { color: isReplyButtonDisabled ? theme.textTertiary : theme.link }]}>Reply</Text>
         </Pressable>
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 44 + 46 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 44 + 46 : 0} // Adjust as needed
       >
         <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContentContainer}>
+          <View style={styles.contextRow}>
+            <Text style={{ color: theme.textTertiary }}>
+              Replying to <Text style={{ color: theme.link }}>@{authorUsername}</Text>
+            </Text>
+          </View>
           <MediaPreview />
           <TextInput
             style={[styles.textInput, { color: theme.textPrimary }]}
             multiline
             autoFocus
-            placeholder="What's happening?"
+            placeholder="Post your reply"
             placeholderTextColor={theme.textTertiary}
             value={text}
             onChangeText={setText}
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   headerButton: {
     fontSize: 16,
   },
-  postButton: {
+  replyButton: {
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -193,6 +193,9 @@ const styles = StyleSheet.create({
   },
   scrollContentContainer: {
     paddingTop: 10,
+  },
+  contextRow: {
+    marginBottom: 10,
   },
   textInput: {
     fontSize: 18,
@@ -282,4 +285,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ComposeScreen;
+export default ReplyComposerScreen;

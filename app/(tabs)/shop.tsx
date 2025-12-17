@@ -1,12 +1,14 @@
 import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/theme";
+import HomeHeader from "@/components/HomeHeader";
 
 export default function ShopScreen() {
   const { theme } = useTheme();
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <HomeHeader />
       <View
         style={{
           flex: 1,

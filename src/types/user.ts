@@ -13,3 +13,5 @@ export type User = {
     is_shadow_banned: boolean;
     is_suspended: boolean;
 };
+
+export type UserProfile = User;
