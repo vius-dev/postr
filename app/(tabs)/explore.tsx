@@ -1,33 +1,22 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
-import TrendItem from '@/components/TrendItem';
 import PostCard from '@/components/PostCard';
 import { Post } from '@/types/post';
 import { User } from '@/types/user';
-import { Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import ForYouFeed from '@/components/ForYouFeed'; // Import the new component
 
 export default function ExploreScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [trends, setTrends] = useState<{ hashtag: string, count: number }[]>([]);
   const [searchResults, setSearchResults] = useState<{ posts: Post[], users: User[] }>({ posts: [], users: [] });
   const [isSearching, setIsSearching] = useState(false);
-
-  useEffect(() => {
-    loadTrends();
-  }, []);
-
-  const loadTrends = async () => {
-    const data = await api.getTrends();
-    setTrends(data);
-  };
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -106,22 +95,10 @@ export default function ExploreScreen() {
         </TouchableOpacity>
       </View>
 
-      {!isSearching ? (
-        <FlatList
-          data={trends}
-          keyExtractor={(item) => item.hashtag}
-          renderItem={({ item, index }) => (
-            <TrendItem hashtag={item.hashtag} count={item.count} rank={index + 1} />
-          )}
-          ListHeaderComponent={
-            <View style={[styles.trendsHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.trendsTitle, { color: theme.textPrimary }]}>Trends for you</Text>
-            </View>
-          }
-          ListFooterComponent={<View style={{ height: 100 }} />}
-        />
-      ) : (
+      {isSearching ? (
         renderSearchResult()
+      ) : (
+        <ForYouFeed />
       )}
     </SafeAreaView>
   );
@@ -136,72 +113,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd', // Added a light border
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 36,
-    borderRadius: 18,
-    paddingHorizontal: 12,
+    height: 40, // Increased height for better touchability
+    borderRadius: 20, // Make it more rounded
+    paddingHorizontal: 15,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     height: '100%',
   },
   settingsIcon: {
     marginLeft: 15,
   },
-  trendsHeader: {
-    padding: 15,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  trendsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   resultsScroll: {
     flex: 1,
   },
   section: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20, // Larger section title
     fontWeight: 'bold',
     paddingHorizontal: 15,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 15,
   },
   userName: {
     fontWeight: 'bold',
-    fontSize: 15,
+    fontSize: 16,
   },
   userHandle: {
-    fontSize: 14,
+    fontSize: 15,
+    color: 'gray',
   },
   emptyContainer: {
     flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 50,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 17,
   },
 });

@@ -7,6 +7,7 @@ import { FeedEngine } from './feed/FeedEngine';
 import { ViewerRelationship } from "@/components/profile/ProfileActionRow";
 import { Notification } from "@/types/notification";
 import { Conversation, Message } from "@/types/message";
+import { eventEmitter } from "@/lib/EventEmitter";
 
 // --- Data Structures for Moderation ---
 const mutedUsers = new Set<string>();
@@ -116,17 +117,32 @@ allNotifications.push({
   isRead: true,
 });
 
+const mockMessages: Record<string, Message[]> = {
+  'conv-1': [
+    { id: 'm1', senderId: '1', text: 'Hey! How are you doing?', createdAt: new Date(Date.now() - 1000 * 60 * 65).toISOString() },
+    { id: 'm2', senderId: '0', text: 'I am good, thanks for asking! How about you?', createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString() },
+    { id: 'm3', senderId: '1', text: 'Doing great. Just working on this cool project.', createdAt: new Date(Date.now() - 1000 * 60 * 55).toISOString() },
+    { id: 'm4', senderId: '0', text: 'Sounds interesting! Tell me more.', createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() },
+    { id: 'm5', senderId: '1', text: 'It is a new social media app with a focus on privacy.', createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString() },
+    { id: 'm6', senderId: '1', text: 'We are using React Native and Expo.', createdAt: new Date(Date.now() - 1000 * 60 * 9).toISOString() },
+    { id: 'm7', senderId: '0', text: 'Wow, that is the stack I am learning right now!', createdAt: new Date().toISOString() },
+  ],
+  'conv-2': [],
+  'conv-3': [
+      { id: 'm8', senderId: '1', text: 'Anyone hitting a bug with the latest Expo SDK?', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()}
+  ],
+  'conv-4': [
+    { id: 'm9', senderId: '2', text: 'Big news from Expo today!', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString()}
+  ]
+};
+
 const mockConversations: Conversation[] = [
   {
     id: 'conv-1',
     participants: [userMap.get('0')!, userMap.get('1')!],
-    lastMessage: {
-      id: 'msg-1',
-      senderId: '1',
-      text: 'Hey! How are you doing?',
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    },
+    lastMessage: mockMessages['conv-1'][mockMessages['conv-1'].length - 1],
     unreadCount: 1,
+    type: "DM"
   },
   {
     id: 'conv-2',
@@ -138,6 +154,23 @@ const mockConversations: Conversation[] = [
       createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     },
     unreadCount: 0,
+    type: "DM"
+  },
+  {
+    id: 'conv-3',
+    name: 'React Native Devs',
+    participants: [userMap.get('0')!, userMap.get('1')!, userMap.get('3')!],
+    lastMessage: mockMessages['conv-3'][mockMessages['conv-3'].length - 1],
+    unreadCount: 3,
+    type: "GROUP"
+  },
+  {
+    id: 'conv-4',
+    name: 'Expo Fanatics',
+    participants: [userMap.get('0')!, userMap.get('2')!, userMap.get('4')!, userMap.get('5')!],
+    lastMessage: mockMessages['conv-4'][mockMessages['conv-4'].length - 1],
+    unreadCount: 0,
+    type: "CHANNEL"
   }
 ];
 
@@ -237,6 +270,14 @@ export const api = {
       posts: response.posts,
       nextCursor: response.nextCursor ? JSON.stringify(response.nextCursor) : undefined,
     };
+  },
+
+  getForYouFeed: async (offset = 0): Promise<Post[]> => {
+    const pageSize = 10;
+    const filteredPosts = allPosts.filter(
+      p => !mutedUsers.has(p.author.username) && !blockedUsersIDs.has(p.author.id)
+    );
+    return filteredPosts.slice(offset, offset + pageSize);
   },
 
   fetchPost: async (postId: string): Promise<Post | undefined> => {
@@ -381,10 +422,49 @@ export const api = {
 
   getConversations: async (): Promise<Conversation[]> => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    return mockConversations;
+    return mockConversations.map(conv => ({
+      ...conv,
+      lastMessage: mockMessages[conv.id]?.[mockMessages[conv.id]?.length - 1] || conv.lastMessage,
+    }));
   },
 
   getConversation: async (convId: string): Promise<Conversation | undefined> => {
-    return mockConversations.find(c => c.id === convId);
-  }
+    const conversation = mockConversations.find(c => c.id === convId);
+    if (!conversation) return undefined;
+
+    return {
+      ...conversation,
+      lastMessage: mockMessages[convId]?.[mockMessages[convId]?.length - 1] || conversation.lastMessage,
+    };
+  },
+
+  getMessages: async (convId: string): Promise<Message[]> => {
+    return mockMessages[convId] || [];
+  },
+
+  sendMessage: async (convId: string, text: string): Promise<Message> => {
+    const conversation = mockConversations.find(c => c.id === convId);
+    if (!conversation) throw new Error("Conversation not found");
+
+    const newMessage: Message = {
+      id: `msg-${Date.now()}`,
+      senderId: '0', // Assume current user is sending
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!mockMessages[convId]) {
+      mockMessages[convId] = [];
+    }
+    mockMessages[convId].push(newMessage);
+    
+    // Update the last message of the conversation
+    conversation.lastMessage = newMessage;
+    conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+
+    // In a real app, this would be a push notification or websocket event
+    eventEmitter.emit('newMessage', { conversationId: convId, message: newMessage });
+
+    return newMessage;
+  },
 };

@@ -7,9 +7,11 @@ import { api } from '@/lib/api';
 import { Conversation } from '@/types/message';
 import ConversationItem from '@/components/ConversationItem';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 export default function MessagesScreen() {
   const { theme } = useTheme();
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,11 +33,15 @@ export default function MessagesScreen() {
   };
 
   const filteredConversations = conversations.filter(conv => {
-    const otherUser = conv.participants.find(p => p.id !== '0') || conv.participants[0];
-    return (
-      otherUser.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      otherUser.username.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const query = searchQuery.toLowerCase();
+    if (conv.type === 'DM') {
+      const otherUser = conv.participants.find(p => p.id !== '0') || conv.participants[0];
+      return (
+        otherUser.name.toLowerCase().includes(query) ||
+        otherUser.username.toLowerCase().includes(query)
+      );
+    }
+    return conv.name?.toLowerCase().includes(query);
   });
 
   return (
@@ -54,7 +60,7 @@ export default function MessagesScreen() {
           <Ionicons name="search" size={18} color={theme.textTertiary} style={styles.searchIcon} />
           <TextInput
             style={[styles.searchInput, { color: theme.textPrimary }]}
-            placeholder="Search Direct Messages"
+            placeholder="Search Messages"
             placeholderTextColor={theme.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -77,7 +83,7 @@ export default function MessagesScreen() {
               {searchQuery ? 'Try searching for something else.' : 'Direct Messages are private conversations between you and other people on Twitter.'}
             </Text>
             {!searchQuery && (
-              <TouchableOpacity style={[styles.writeButton, { backgroundColor: theme.primary }]}>
+              <TouchableOpacity style={[styles.writeButton, { backgroundColor: theme.primary }]} onPress={() => router.push('/(modals)/new-message')}>
                 <Text style={styles.writeButtonText}>Write a message</Text>
               </TouchableOpacity>
             )}
@@ -86,7 +92,7 @@ export default function MessagesScreen() {
       />
 
       {/* Compose FAB */}
-      <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary }]}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary }]} onPress={() => router.push('/(modals)/new-message')}>
         <Ionicons name="mail-outline" size={24} color="white" />
       </TouchableOpacity>
     </SafeAreaView>

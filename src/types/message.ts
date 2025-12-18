@@ -7,9 +7,15 @@ export interface Message {
     createdAt: string;
 }
 
+export type ConversationType = 'DM' | 'GROUP' | 'CHANNEL';
+
 export interface Conversation {
     id: string;
+    type: ConversationType;
     participants: User[];
     lastMessage?: Message;
     unreadCount: number;
+    name?: string; 
+    description?: string; 
+    ownerId?: string; 
 }

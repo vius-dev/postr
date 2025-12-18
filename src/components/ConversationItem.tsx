@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Conversation } from '@/types/message';
 import { useTheme } from '@/theme/theme';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 interface ConversationItemProps {
     conversation: Conversation;
@@ -12,9 +13,6 @@ interface ConversationItemProps {
 export default function ConversationItem({ conversation }: ConversationItemProps) {
     const { theme } = useTheme();
     const router = useRouter();
-
-    // Find the other participant (not the current user '0')
-    const otherUser = conversation.participants.find(p => p.id !== '0') || conversation.participants[0];
 
     const formatTime = (dateString: string) => {
         const date = new Date(dateString);
@@ -30,18 +28,42 @@ export default function ConversationItem({ conversation }: ConversationItemProps
         }
     };
 
+    const renderAvatar = () => {
+        if (conversation.type === 'DM') {
+            const otherUser = conversation.participants.find(p => p.id !== '0') || conversation.participants[0];
+            return <Image source={{ uri: otherUser.avatar }} style={styles.avatar} />;
+        } else {
+            const iconName = conversation.type === 'GROUP' ? 'people-outline' : 'megaphone-outline';
+            return (
+                <View style={[styles.avatar, { backgroundColor: theme.surface, justifyContent: 'center', alignItems: 'center' }]}>
+                    <Ionicons name={iconName} size={28} color={theme.textSecondary} />
+                </View>
+            )
+        }
+    }
+
+    const getName = () => {
+        if (conversation.type === 'DM') {
+            const otherUser = conversation.participants.find(p => p.id !== '0') || conversation.participants[0];
+            return (
+                <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>
+                    {otherUser.name}
+                    <Text style={[styles.handle, { color: theme.textTertiary }]}> @{otherUser.username}</Text>
+                </Text>
+            );
+        }
+        return <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>{conversation.name}</Text>;
+    }
+
     return (
         <TouchableOpacity
             style={[styles.container, { borderBottomColor: theme.border }]}
-            onPress={() => router.push(`/(modals)/conversation?id=${conversation.id}`)}
+            onPress={() => router.push(`/conversation/${conversation.id}`)}
         >
-            <Image source={{ uri: otherUser.avatar }} style={styles.avatar} />
+            {renderAvatar()}
             <View style={styles.content}>
                 <View style={styles.header}>
-                    <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>
-                        {otherUser.name}
-                        <Text style={[styles.handle, { color: theme.textTertiary }]}> @{otherUser.username}</Text>
-                    </Text>
+                    {getName()}
                     {conversation.lastMessage && (
                         <Text style={[styles.time, { color: theme.textTertiary }]}>
                             · {formatTime(conversation.lastMessage.createdAt)}

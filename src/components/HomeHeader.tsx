@@ -1,35 +1,27 @@
 import React from 'react';
-import { View, Image, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/theme/theme';
-import { useAuth } from '@/providers/AuthProvider';
 
-export default function HomeHeader() {
+const HomeHeader = () => {
   const { theme } = useTheme();
-  const { user } = useAuth();
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Image source={{ uri: user?.avatar }} style={styles.avatar} />
-      <Ionicons name="logo-twitter" size={28} color={theme.primary} />
-      <View style={{ width: 32 }} />
+    <View style={[styles.header, { backgroundColor: theme.background }]}>
+      <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Home</Text>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  header: {
+    padding: 15,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    height: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E1E8ED',
   },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
+
+export default HomeHeader;
