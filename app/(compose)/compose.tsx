@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,9 +13,11 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme/theme';
 import { Ionicons } from '@expo/vector-icons';
+import MediaGrid from '@/components/MediaGrid';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@/lib/api';
 import QuotedPost from '@/components/QuotedPost';
@@ -28,7 +29,7 @@ const MAX_CHARACTERS = 280;
 const ComposeScreen = () => {
   const { theme } = useTheme();
   const router = useRouter();
-  const { quotePostId } = useLocalSearchParams<{ quotePostId: string }>();
+  const { quotePostId, replyToId, authorUsername } = useLocalSearchParams<{ quotePostId: string, replyToId: string, authorUsername: string }>();
   const [text, setText] = useState('');
   const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
@@ -50,7 +51,7 @@ const ComposeScreen = () => {
   }, [quotePostId]);
 
   const characterCount = text.length;
-  const isPostButtonDisabled = characterCount === 0 || characterCount > MAX_CHARACTERS;
+  const isPostButtonDisabled = (characterCount === 0 && media.length === 0) || characterCount > MAX_CHARACTERS;
 
   const handleCancel = () => {
     if (text.length > 0 || media.length > 0) {
@@ -70,23 +71,32 @@ const ComposeScreen = () => {
 
   const handlePost = async () => {
     try {
-      await api.createPost({
-        content: text,
-        quotedPostId: quotePostId || undefined
-      });
+      if (replyToId) {
+        await api.createComment(replyToId, {
+          content: text,
+          media: media.map(m => ({ type: 'image', url: m.uri }))
+        });
+      } else {
+        await api.createPost({
+          content: text,
+          quotedPostId: quotePostId || undefined,
+          media: media.map(m => ({ type: 'image', url: m.uri }))
+        });
+      }
       router.back();
     } catch (error) {
       console.error('Failed to create post', error);
+      Alert.alert('Error', 'Failed to create post. Please try again.');
     }
   };
 
   const handlePickImage = async () => {
     if (media.length >= 4) return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: 4 - media.length,
-      quality: 1,
+      quality: 0.7, // Compress images to reduce storage cost
     });
 
     if (!result.canceled) {
@@ -94,74 +104,50 @@ const ComposeScreen = () => {
     }
   };
 
-  const removeMedia = (uri: string) => {
-    setMedia(media.filter((item) => item.uri !== uri));
+  const handleRemoveMedia = (url: string) => {
+    setMedia(media.filter((item) => item.uri !== url));
   };
 
   const MediaPreview = () => {
     if (media.length === 0) return null;
-
-    const renderMediaItem = (item: ImagePicker.ImagePickerAsset, containerStyle: object) => (
-      <View style={containerStyle}>
-        <Image source={{ uri: item.uri }} style={styles.mediaPreviewImage} />
-        <TouchableOpacity onPress={() => removeMedia(item.uri)} style={styles.removeMediaButton}>
-          <Ionicons name="close" size={18} color="white" />
-        </TouchableOpacity>
-      </View>
-    );
-
-    if (media.length === 1) {
-      return <View style={styles.mediaGridContainer}>{renderMediaItem(media[0], styles.gridImage1)}</View>;
-    }
-    if (media.length === 2) {
-      return (
-        <View style={styles.mediaGridContainer}>
-          {renderMediaItem(media[0], styles.gridImage2)}
-          {renderMediaItem(media[1], styles.gridImage2)}
-        </View>
-      );
-    }
-    if (media.length === 3) {
-      return (
-        <View style={styles.mediaGridContainer}>
-          {renderMediaItem(media[0], styles.gridImage3Left)}
-          <View style={styles.gridImage3RightContainer}>
-            {renderMediaItem(media[1], styles.gridImage3Right)}
-            {renderMediaItem(media[2], styles.gridImage3Right)}
-          </View>
-        </View>
-      );
-    }
     return (
-      <View style={[styles.mediaGridContainer, { flexWrap: 'wrap' }]}>
-        {media.map((item) => renderMediaItem(item, styles.gridImage4))}
-      </View>
+      <MediaGrid
+        media={media.map(m => ({ type: 'image', url: m.uri }))}
+        onRemove={handleRemoveMedia}
+      />
     );
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={handleCancel}>
           <Text style={[styles.headerButton, { color: theme.link }]}>Cancel</Text>
         </Pressable>
         <Pressable onPress={handlePost} disabled={isPostButtonDisabled}>
-          <Text style={[styles.postButton, { color: isPostButtonDisabled ? theme.textTertiary : theme.link }]}>Post</Text>
+          <Text style={[styles.postButton, { color: isPostButtonDisabled ? theme.textTertiary : theme.link }]}>
+            {replyToId ? 'Reply' : 'Post'}
+          </Text>
         </Pressable>
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 44 + 46 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContentContainer}>
+          {authorUsername && (
+            <Text style={[styles.replyingTo, { color: theme.textTertiary }]}>
+              Replying to <Text style={{ color: theme.link }}>@{authorUsername}</Text>
+            </Text>
+          )}
           <MediaPreview />
           <TextInput
             style={[styles.textInput, { color: theme.textPrimary }]}
             multiline
             autoFocus
-            placeholder="What's happening?"
+            placeholder={replyToId ? "Post your reply" : "What's happening?"}
             placeholderTextColor={theme.textTertiary}
             value={text}
             onChangeText={setText}
@@ -223,6 +209,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     minHeight: 100,
   },
+  replyingTo: {
+    fontSize: 15,
+    marginBottom: 10,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -245,48 +235,6 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: 14,
-  },
-  mediaGridContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    marginBottom: 10,
-    backgroundColor: '#fff',
-  },
-  gridImage1: {
-    width: '100%',
-    height: '100%',
-  },
-  gridImage2: {
-    width: '50%',
-    height: '100%',
-    borderRightWidth: 2,
-    borderColor: '#fff',
-  },
-  gridImage3Left: {
-    width: '66.66%',
-    height: '100%',
-    borderRightWidth: 2,
-    borderColor: '#fff',
-  },
-  gridImage3RightContainer: {
-    width: '33.34%',
-    height: '100%',
-  },
-  gridImage3Right: {
-    width: '100%',
-    height: '50%',
-    borderBottomWidth: 2,
-    borderColor: '#fff',
-  },
-  gridImage4: {
-    width: '50%',
-    height: '50%',
-    borderRightWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: '#fff',
   },
   mediaPreviewImage: {
     width: '100%',

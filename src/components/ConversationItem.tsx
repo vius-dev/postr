@@ -8,9 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface ConversationItemProps {
     conversation: Conversation;
+    onLongPress?: () => void;
 }
 
-export default function ConversationItem({ conversation }: ConversationItemProps) {
+export default function ConversationItem({ conversation, onLongPress }: ConversationItemProps) {
     const { theme } = useTheme();
     const router = useRouter();
 
@@ -57,8 +58,10 @@ export default function ConversationItem({ conversation }: ConversationItemProps
 
     return (
         <TouchableOpacity
-            style={[styles.container, { borderBottomColor: theme.border }]}
+            style={[styles.container, { backgroundColor: theme.background }]}
             onPress={() => router.push(`/conversation/${conversation.id}`)}
+            onLongPress={onLongPress}
+            delayLongPress={500}
         >
             {renderAvatar()}
             <View style={styles.content}>

@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 
 export default function PostDetailScreen() {
@@ -22,43 +23,45 @@ export default function PostDetailScreen() {
   ];
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
-      <ScrollView style={styles.scrollContainer}>
-        {/* Original Post */}
-        <View style={styles.postContainer}>
-          <Text style={styles.author}>{post.author.name}</Text>
-          <Text style={styles.content}>{post.content}</Text>
-        </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }} edges={['bottom']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
+        <ScrollView style={styles.scrollContainer}>
+          {/* Original Post */}
+          <View style={styles.postContainer}>
+            <Text style={styles.author}>{post.author.name}</Text>
+            <Text style={styles.content}>{post.content}</Text>
+          </View>
 
-        {/* Comments Section */}
-        <View style={styles.commentsSection}>
-          <Text style={styles.commentsHeader}>Comments</Text>
-          {comments.map(c => (
-            <View key={c.id} style={styles.commentContainer}>
-              <Text style={styles.commentAuthor}>{c.author.name}</Text>
-              <Text>{c.content}</Text>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+          {/* Comments Section */}
+          <View style={styles.commentsSection}>
+            <Text style={styles.commentsHeader}>Comments</Text>
+            {comments.map(c => (
+              <View key={c.id} style={styles.commentContainer}>
+                <Text style={styles.commentAuthor}>{c.author.name}</Text>
+                <Text>{c.content}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
 
-      {/* Comment Input */}
-      <View style={styles.commentInputContainer}>
-        <TextInput
-          style={styles.commentInput}
-          placeholder="Write a comment..."
-          value={comment}
-          onChangeText={setComment}
-        />
-        <TouchableOpacity style={styles.sendButton}>
-          <Text style={styles.sendButtonText}>Send</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        {/* Comment Input */}
+        <View style={styles.commentInputContainer}>
+          <TextInput
+            style={styles.commentInput}
+            placeholder="Write a comment..."
+            value={comment}
+            onChangeText={setComment}
+          />
+          <TouchableOpacity style={styles.sendButton}>
+            <Text style={styles.sendButtonText}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

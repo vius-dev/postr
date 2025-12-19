@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, Image, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme/theme';
@@ -166,12 +166,33 @@ export default function UserProfileScreen() {
       await api.followUser(user.id);
       const newRel = await api.fetchUserRelationship(user.id);
       setRelationship(newRel);
+
+      // Refresh following list to show the newly followed user
+      const updatedFollowing = await api.getFollowing('0'); // Current user ID is '0'
+      setFollowing(updatedFollowing);
     } catch (error) {
-      console.error("Failed to follow user", error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to follow user';
+
+      // Check if it's a rate limit error
+      if (errorMessage.includes('Rate limit exceeded')) {
+        Alert.alert(
+          'Rate Limit Reached',
+          errorMessage,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to follow user. Please try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        console.error("Failed to follow user", error);
+      }
     } finally {
       setIsFollowingLoading(false);
     }
   };
+
 
   const handleUnfollow = async () => {
     if (!user) return;
@@ -180,8 +201,28 @@ export default function UserProfileScreen() {
       await api.unfollowUser(user.id);
       const newRel = await api.fetchUserRelationship(user.id);
       setRelationship(newRel);
+
+      // Refresh following list to remove the unfollowed user
+      const updatedFollowing = await api.getFollowing('0'); // Current user ID is '0'
+      setFollowing(updatedFollowing);
     } catch (error) {
-      console.error("Failed to unfollow user", error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to unfollow user';
+
+      // Check if it's a rate limit error
+      if (errorMessage.includes('Rate limit exceeded')) {
+        Alert.alert(
+          'Rate Limit Reached',
+          errorMessage,
+          [{ text: 'OK', style: 'default' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to unfollow user. Please try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        console.error("Failed to unfollow user", error);
+      }
     } finally {
       setIsFollowingLoading(false);
     }
@@ -209,9 +250,9 @@ export default function UserProfileScreen() {
       )}
       {user && <ProfileBio user={user} />}
       {user && <ProfileStats
-        postCount={123}
-        followingCount={456}
-        followerCount={789}
+        postCount={posts.length}
+        followingCount={following.length}
+        followerCount={followers.length}
         activeTab={selectedTab}
         onPostsPress={() => setSelectedTab('Posts')}
         onFollowingPress={() => setSelectedTab('Following')}

@@ -857,3 +857,26 @@ No reused copy. No reused logic.
 > **Inbox is a window.
 > Domains are rooms.
 > Messages are furniture.**
+
+
+Based on the Messages_design.md document and our recent progress, the core mock backend logic for creating and displaying different conversation types (DMs, Groups, Channels in src/lib/api.ts) is now complete.
+
+However, several key UI and feature details from the design document are still pending. Here is what remains to be done to fully realize the messaging section:
+
+Channel Feed Styling: The design requires a "Timeline" style for Channel feeds, which is different from the "Chat" style used for DMs and Groups. Currently, all conversation types use the same chat-style layout.
+
+Group/Channel Info Screens: Tapping the header in a Group or Channel should navigate to a dedicated info screen showing members and settings. These screens have not been created.
+
+Custom Empty States: The design specifies unique empty-state messages for each context:
+
+Inbox: “No messages yet”
+Group: “No one has posted yet”
+Channel: “No announcements yet” We need to implement this domain-specific copy instead of a generic message.
+System Messages: We need to add system-generated messages within groups for events like users joining or leaving (e.g., "Jane Smith joined the group").
+
+Admin/Role-Based Features:
+
+Displaying "Admin" badges next to names in the message feed.
+The ability to disable the message composer for certain user roles in a group or channel.
+
+You will start by implementing the custom empty states, as that is a small but important detail from the design. you will then move on to the more complex features like the channel feed styling and info screens.

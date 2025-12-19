@@ -83,7 +83,7 @@ const EditProfileScreen = () => {
 
   const pickImage = async (type: 'avatar' | 'header', setter: React.Dispatch<React.SetStateAction<string | null>>) => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: type === 'avatar' ? [1, 1] : [3, 1],
       quality: 1,

@@ -15,6 +15,7 @@ import { useTheme } from '@/theme/theme';
 import { useRealtime } from '@/realtime/RealtimeContext';
 import Card from '@/components/Card'; // Import the new Card component
 import { timeAgo } from '@/utils/time'; // Import a time formatting utility
+import MediaGrid from '@/components/MediaGrid';
 
 interface PostCardProps {
   post: Post;
@@ -39,7 +40,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   }, [counts, post.id, post.likeCount, post.dislikeCount, post.laughCount, post.repostCount]);
 
   const handleComment = () => {
-    router.push({ pathname: '/(compose)/reply', params: { replyToId: post.id, authorUsername: post.author.username } });
+    router.push({ pathname: '/(compose)/compose', params: { replyToId: post.id, authorUsername: post.author.username } });
   };
 
   const handleReaction = async (action: ReactionAction) => {
@@ -51,7 +52,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
     let deltas: { [key: string]: number } = { likes: 0, dislikes: 0, laughs: 0 };
     if (prevReaction !== 'NONE') deltas[prevReaction.toLowerCase() + 's'] = -1;
     if (nextReaction !== 'NONE') deltas[nextReaction.toLowerCase() + 's'] = 1;
-    
+
     setCounts(post.id, { ...currentCounts, ...Object.fromEntries(Object.entries(deltas).map(([k, v]) => [k, currentCounts[k as keyof typeof currentCounts] + v])) });
 
     try {
@@ -86,13 +87,14 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   const goToProfile = () => router.push(`/(profile)/${post.author.username}`);
   const goToPost = () => !isFocal && router.push(`/post/${post.id}`);
 
+
   return (
     <Card>
-      <Pressable style={styles.container} onPress={goToPost} disabled={isFocal}>
-        <Pressable onPress={goToProfile}>
+      <View style={styles.container}>
+        <TouchableOpacity onPress={goToProfile} activeOpacity={0.7}>
           <Image source={{ uri: post.author.avatar }} style={styles.avatar} />
-        </Pressable>
-        
+        </TouchableOpacity>
+
         <View style={styles.mainContent}>
           {post.repostedBy && (
             <View style={styles.repostContainer}>
@@ -103,11 +105,11 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
 
           <Card.Header>
             <View style={styles.authorContainer}>
-              <View style={styles.authorInfo}>
-                <Text style={[styles.authorName, { color: theme.textPrimary }]}>{post.author.name}</Text>
-                <Text style={[styles.authorUsername, { color: theme.textTertiary }]}>@{post.author.username}</Text>
+              <TouchableOpacity onPress={goToProfile} activeOpacity={0.7} style={styles.authorInfo}>
+                <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1}>{post.author.name}</Text>
+                <Text style={[styles.authorUsername, { color: theme.textTertiary }]} numberOfLines={1}>@{post.author.username}</Text>
                 <Text style={[styles.timestamp, { color: theme.textTertiary }]}>· {timeAgo(post.createdAt)}</Text>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.moreButton}>
                 <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
@@ -115,20 +117,44 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
           </Card.Header>
 
           <Card.Content>
-            <ParsedText
-              style={[styles.content, { color: theme.textPrimary }]}
-              parse={[
-                { pattern: /@(\w+)/, style: [styles.mention, { color: theme.link }], onPress: handleMentionPress },
-                { pattern: /#(\w+)/, style: [styles.hashtag, { color: theme.link }], onPress: handleHashtagPress },
-              ]}
-            >
-              {post.content}
-            </ParsedText>
-            {post.poll && <PollView poll={post.poll} />}
-            {post.quotedPost && <QuotedPost post={post.quotedPost} />}
+            <TouchableOpacity onPress={goToPost} disabled={isFocal} activeOpacity={0.9}>
+              {post.content ? (
+                <ParsedText
+                  style={[styles.content, { color: theme.textPrimary }]}
+                  parse={[
+                    { pattern: /@(\w+)/, style: [styles.mention, { color: theme.link }], onPress: handleMentionPress },
+                    { pattern: /#(\w+)/, style: [styles.hashtag, { color: theme.link }], onPress: handleHashtagPress },
+                  ]}
+                >
+                  {post.content}
+                </ParsedText>
+              ) : null}
+              {post.media && post.media.length > 0 && (
+                <MediaGrid media={post.media} onPress={goToPost} />
+              )}
+              {post.poll && <PollView poll={post.poll} />}
+              {post.quotedPost && <QuotedPost post={post.quotedPost} />}
+            </TouchableOpacity>
           </Card.Content>
 
           <Card.Actions>
+            {isFocal ? (
+              <View style={[styles.focalMetadata, { borderTopColor: theme.border, borderBottomColor: theme.border }]}>
+                <Text style={[styles.focalTime, { color: theme.textTertiary }]}>
+                  {new Date(post.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+                <View style={[styles.focalStats, { borderTopColor: theme.border }]}>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{currentCounts.likes}</Text>
+                    <Text style={[styles.statLabel, { color: theme.textTertiary }]}> Likes</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{currentCounts.reposts}</Text>
+                    <Text style={[styles.statLabel, { color: theme.textTertiary }]}> Reposts</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
             <ReactionBar
               postId={post.id}
               onComment={handleComment}
@@ -140,10 +166,11 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
                 ...currentCounts,
                 comments: post.commentCount,
               }}
+              hideCounts={isFocal}
             />
           </Card.Actions>
         </View>
-      </Pressable>
+      </View>
 
       <RepostModal
         visible={isRepostModalVisible}
@@ -165,9 +192,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 20,
     marginRight: 12,
   },
   mainContent: {
@@ -191,32 +218,58 @@ const styles = StyleSheet.create({
   authorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1, // Allow text to wrap if needed
+    flexShrink: 1,
   },
   authorName: {
     fontWeight: 'bold',
     fontSize: 15,
+    marginRight: 4,
   },
   authorUsername: {
-    marginLeft: 5,
     fontSize: 15,
+    marginRight: 4,
   },
   timestamp: {
-    marginLeft: 5,
     fontSize: 15,
   },
   moreButton: {
-    padding: 2, // Easier to tap
+    padding: 2,
   },
   content: {
     fontSize: 15,
     lineHeight: 22,
-    marginTop: 4,
+    marginBottom: 8,
   },
   mention: {
     fontWeight: 'bold',
   },
   hashtag: {
     fontWeight: 'normal',
+  },
+  focalMetadata: {
+    paddingVertical: 12,
+    marginTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  focalTime: {
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  focalStats: {
+    flexDirection: 'row',
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  statItem: {
+    flexDirection: 'row',
+    marginRight: 20,
+  },
+  statNumber: {
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  statLabel: {
+    fontSize: 15,
   },
 });

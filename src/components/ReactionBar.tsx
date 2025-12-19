@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRealtime } from '@/realtime/RealtimeContext';
 import GrinTearsIcon from '@/components/icons/GrinTearsIcon';
 import { useTheme } from '@/theme/theme';
@@ -22,9 +23,19 @@ interface ReactionBarProps {
     comments: number;
   };
   isReposted?: boolean;
+  hideCounts?: boolean;
 }
 
-export default function ReactionBar({ postId, onComment, onRepost, onReaction, reaction, initialCounts, isReposted }: ReactionBarProps) {
+export default function ReactionBar({
+  postId,
+  onComment,
+  onRepost,
+  onReaction,
+  reaction,
+  initialCounts,
+  isReposted,
+  hideCounts = false
+}: ReactionBarProps) {
   const { counts, initializeCounts } = useRealtime();
   const { theme } = useTheme();
 
@@ -52,23 +63,23 @@ export default function ReactionBar({ postId, onComment, onRepost, onReaction, r
     <View style={styles.container}>
       <TouchableOpacity onPress={onComment} style={styles.button}>
         <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
-        <Text style={[styles.count, { color: iconColor }]}>{initialCounts.comments}</Text>
+        {!hideCounts && <Text style={[styles.count, { color: iconColor }]}>{initialCounts.comments}</Text>}
       </TouchableOpacity>
       <TouchableOpacity onPress={onRepost} style={styles.button}>
         <Ionicons name={isReposted ? "repeat" : "repeat-outline"} size={20} color={repostColor} />
-        <Text style={[styles.count, { color: repostColor }]}>{currentCounts.reposts}</Text>
+        {!hideCounts && <Text style={[styles.count, { color: repostColor }]}>{currentCounts.reposts}</Text>}
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => onReaction('LIKE')} style={styles.button}>
+      <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onReaction('LIKE'); }} style={styles.button}>
         <Ionicons name={reaction === 'LIKE' ? 'heart' : 'heart-outline'} size={20} color={reaction === 'LIKE' ? theme.like : iconColor} />
-        <Text style={[styles.count, { color: iconColor }]}>{currentCounts.likes}</Text>
+        {!hideCounts && <Text style={[styles.count, { color: iconColor }]}>{currentCounts.likes}</Text>}
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => onReaction('DISLIKE')} style={styles.button}>
+      <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onReaction('DISLIKE'); }} style={styles.button}>
         <FontAwesome5 name="heart-broken" size={17} color={reaction === 'DISLIKE' ? theme.primary : iconColor} />
-        <Text style={[styles.count, { color: iconColor }]}>{currentCounts.dislikes}</Text>
+        {!hideCounts && <Text style={[styles.count, { color: iconColor }]}>{currentCounts.dislikes}</Text>}
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => onReaction('LAUGH')} style={styles.button}>
+      <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onReaction('LAUGH'); }} style={styles.button}>
         <GrinTearsIcon size={17} active={reaction === 'LAUGH'} />
-        <Text style={[styles.count, { color: iconColor }]}>{currentCounts.laughs}</Text>
+        {!hideCounts && <Text style={[styles.count, { color: iconColor }]}>{currentCounts.laughs}</Text>}
       </TouchableOpacity>
     </View>
   );

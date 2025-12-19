@@ -1,13 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
-import { Conversation } from '@/types/message';
+import { Conversation, ConversationType } from '@/types/message';
 import ConversationItem from '@/components/ConversationItem';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+
+type FilterType = 'All' | 'DMs' | 'Groups' | 'Channels' | 'Unread';
 
 export default function MessagesScreen() {
   const { theme } = useTheme();
@@ -15,6 +17,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterType>('All');
 
   useEffect(() => {
     loadConversations();
@@ -32,17 +35,55 @@ export default function MessagesScreen() {
     }
   };
 
-  const filteredConversations = conversations.filter(conv => {
-    const query = searchQuery.toLowerCase();
-    if (conv.type === 'DM') {
-      const otherUser = conv.participants.find(p => p.id !== '0') || conv.participants[0];
-      return (
-        otherUser.name.toLowerCase().includes(query) ||
-        otherUser.username.toLowerCase().includes(query)
-      );
+  const filteredConversations = useMemo(() => {
+    return conversations.filter(conv => {
+      // Search logic
+      const query = searchQuery.toLowerCase();
+      let matchesSearch = true;
+      if (query) {
+        if (conv.type === 'DM') {
+          const otherUser = conv.participants.find(p => p.id !== '0') || conv.participants[0];
+          matchesSearch = otherUser.name.toLowerCase().includes(query) ||
+            otherUser.username.toLowerCase().includes(query);
+        } else {
+          matchesSearch = conv.name?.toLowerCase().includes(query) || false;
+        }
+      }
+
+      if (!matchesSearch) return false;
+
+      // Filter logic
+      if (activeFilter === 'All') return true;
+      if (activeFilter === 'Unread') return conv.unreadCount > 0;
+      if (activeFilter === 'DMs') return conv.type === 'DM';
+      if (activeFilter === 'Groups') return conv.type === 'GROUP';
+      if (activeFilter === 'Channels') return conv.type === 'CHANNEL';
+
+      return true;
+    });
+  }, [conversations, searchQuery, activeFilter]);
+
+  const { pinnedConversations, otherConversations } = useMemo(() => {
+    // Only show pinned section if filter is 'All' or user is searching
+    if (activeFilter !== 'All' && !searchQuery) {
+      return { pinnedConversations: [], otherConversations: filteredConversations };
     }
-    return conv.name?.toLowerCase().includes(query);
-  });
+
+    const pinned = filteredConversations.filter(c => c.isPinned);
+    const others = filteredConversations.filter(c => !c.isPinned);
+    return { pinnedConversations: pinned, otherConversations: others };
+  }, [filteredConversations, activeFilter, searchQuery]);
+
+  const filters: FilterType[] = ['All', 'DMs', 'Groups', 'Channels', 'Unread'];
+
+  const handlePin = async (convId: string, pinned: boolean) => {
+    try {
+      await api.pinConversation(convId, pinned);
+      loadConversations();
+    } catch (error) {
+      console.error('Error pinning conversation:', error);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
@@ -68,16 +109,62 @@ export default function MessagesScreen() {
         </View>
       </View>
 
+      {/* Filter Chips */}
+      <View style={styles.filtersContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContent}>
+          {filters.map(filter => (
+            <TouchableOpacity
+              key={filter}
+              onPress={() => setActiveFilter(filter)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: activeFilter === filter ? theme.primary : theme.surface }
+              ]}
+            >
+              <Text style={[
+                styles.filterText,
+                { color: activeFilter === filter ? 'white' : theme.textSecondary }
+              ]}>
+                {filter}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <FlatList
-        data={filteredConversations}
+        data={otherConversations}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ConversationItem conversation={item} />}
+        renderItem={({ item }) => (
+          <ConversationItem
+            conversation={item}
+            onLongPress={() => handlePin(item.id, !item.isPinned)}
+          />
+        )}
         refreshing={loading}
         onRefresh={loadConversations}
+        ListHeaderComponent={
+          pinnedConversations.length > 0 ? (
+            <View style={styles.pinnedSection}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="pin" size={14} color={theme.textTertiary} style={{ marginRight: 6 }} />
+                <Text style={[styles.sectionTitleText, { color: theme.textTertiary }]}>PINNED MESSAGES</Text>
+              </View>
+              {pinnedConversations.map(conv => (
+                <ConversationItem
+                  key={conv.id}
+                  conversation={conv}
+                  onLongPress={() => handlePin(conv.id, false)}
+                />
+              ))}
+              <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
-              {searchQuery ? 'No results found' : 'Send a message, get a message'}
+              {searchQuery ? 'No results found' : 'No messages yet'}
             </Text>
             <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
               {searchQuery ? 'Try searching for something else.' : 'Direct Messages are private conversations between you and other people on Twitter.'}
@@ -134,6 +221,45 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     height: '100%',
+  },
+  filtersContainer: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent',
+  },
+  filtersContent: {
+    paddingHorizontal: 15,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pinnedSection: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'transparent',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingTop: 15,
+    paddingBottom: 5,
+  },
+  sectionTitleText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 10,
+    opacity: 0.2,
   },
   emptyContainer: {
     padding: 30,

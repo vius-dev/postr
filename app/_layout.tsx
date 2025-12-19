@@ -75,10 +75,11 @@ export default function AppLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(profile)" options={{ headerShown: false }} />
             <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
+            <Stack.Screen name="post/[id]" options={{ title: 'Post' }} />
             <Stack.Screen
               name="(compose)/compose"
               options={{
-                title: 'Compose',
+                headerShown: false,
                 presentation: 'modal',
               }}
             />

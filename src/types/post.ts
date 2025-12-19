@@ -22,7 +22,9 @@ export type Comment = {
   author: Author;
   content: string;
   createdAt: string;
-  replies?: Comment[];
+  comments?: Comment[]; // Unified field name
+  media?: Media[];
+  parentPostId?: string;
 };
 
 export type Post = {

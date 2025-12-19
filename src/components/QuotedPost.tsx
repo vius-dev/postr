@@ -5,6 +5,8 @@ import { Post } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import { useRouter } from 'expo-router';
 
+import MediaGrid from './MediaGrid';
+
 interface QuotedPostProps {
   post: Post;
 }
@@ -33,7 +35,12 @@ const QuotedPost = ({ post }: QuotedPostProps) => {
           </Pressable>
           <Text style={[styles.timestamp, { color: theme.textTertiary }]}>{new Date(post.createdAt).toLocaleDateString()}</Text>
         </View>
-        <Text style={{ color: theme.textPrimary }}>{post.content}</Text>
+        {post.content ? (
+          <Text style={{ color: theme.textPrimary, marginBottom: post.media?.length ? 8 : 0 }}>{post.content}</Text>
+        ) : null}
+        {post.media && post.media.length > 0 && (
+          <MediaGrid media={post.media} onPress={goToPost} />
+        )}
       </View>
     </Pressable>
   );
@@ -43,7 +50,7 @@ const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
     borderRadius: 10,
-    padding: 10,
+    padding: 5,
     marginTop: 10,
   },
   header: {

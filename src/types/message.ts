@@ -5,6 +5,8 @@ export interface Message {
     senderId: string;
     text: string;
     createdAt: string;
+    type?: 'CHAT' | 'SYSTEM';
+    reactions?: Record<string, number>;
 }
 
 export type ConversationType = 'DM' | 'GROUP' | 'CHANNEL';
@@ -15,7 +17,9 @@ export interface Conversation {
     participants: User[];
     lastMessage?: Message;
     unreadCount: number;
-    name?: string; 
-    description?: string; 
-    ownerId?: string; 
+    name?: string;
+    description?: string;
+    ownerId?: string;
+    isPinned?: boolean;
+    pinnedMessageId?: string;
 }

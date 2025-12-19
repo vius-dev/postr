@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, TouchableOpacity } from 'react-native';
 import { Comment, ReactionAction } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import ReactionBar from './ReactionBar';
 import { api } from '@/lib/api';
 import { useRouter } from 'expo-router';
+import { timeAgo } from '@/utils/time';
+import MediaGrid from './MediaGrid';
 
 const INDENT_UNIT = 16;
 const MAX_INDENT_LEVEL = 4;
@@ -21,20 +23,21 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
   const [comment, setComment] = useState(initialComment);
 
   const handleReaction = async (action: ReactionAction) => {
-    const originalComment = comment;
-    const newComment = { ...comment, userReaction: action };
-    setComment(newComment);
+    const prevReaction = comment.userReaction;
+    const nextReaction = prevReaction === action ? 'NONE' : action;
+
+    setComment(prev => ({ ...prev, userReaction: nextReaction }));
+
     try {
-      // Assuming an API call to react to a comment exists
-      // await api.reactToComment(comment.id, action);
+      await api.react(comment.id, nextReaction);
     } catch (error) {
       console.error(`Failed to ${action} comment`, error);
-      setComment(originalComment);
+      setComment(prev => ({ ...prev, userReaction: prevReaction }));
     }
   };
 
   const handleCommentPress = () => {
-    router.push({ pathname: '/compose', params: { replyToId: comment.id, authorUsername: comment.author.username } });
+    router.push({ pathname: '/(compose)/compose', params: { replyToId: comment.id, authorUsername: comment.author.username } });
   };
 
   const handleRepost = () => {
@@ -46,37 +49,38 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
     router.push(`/(profile)/${comment.author.username}`);
   };
 
-  const goToPost = () => {
-    // A comment is not a post, so it can't be the focal point of a new Post Detail screen.
-    // The spec says "Body -> post detail (that reply becomes focal)", which is contradictory.
-    // For now, we'll log this action.
-    console.log("Navigate to comment detail");
-  };
 
   const clampedIndentation = Math.min(indentationLevel, MAX_INDENT_LEVEL);
   const indentationStyle = {
     paddingLeft: clampedIndentation * INDENT_UNIT,
   };
 
+  const goToPost = () => {
+    router.push(`/post/${comment.id}`);
+  };
+
   return (
     <View style={[styles.container, indentationStyle, { borderBottomColor: theme.borderLight }]}>
-      {indentationLevel > 0 && (
-        <View style={[styles.threadLine, { left: (clampedIndentation * INDENT_UNIT) / 2, backgroundColor: theme.border }]} />
+      {indentationLevel > 1 && (
+        <View style={[styles.threadLine, { left: clampedIndentation * INDENT_UNIT + 20, backgroundColor: theme.border }]} />
       )}
-      <Pressable onPress={goToProfile}>
+      <TouchableOpacity onPress={goToProfile} activeOpacity={0.7}>
         <Image source={{ uri: comment.author.avatar }} style={styles.avatar} />
-      </Pressable>
+      </TouchableOpacity>
       <View style={styles.contentContainer}>
         <View style={styles.authorContainer}>
-          <Pressable onPress={goToProfile} style={styles.authorInfo}>
+          <TouchableOpacity onPress={goToProfile} activeOpacity={0.7} style={styles.authorInfo}>
             <Text style={[styles.authorName, { color: theme.textPrimary }]}>{comment.author.name}</Text>
             <Text style={[styles.authorUsername, { color: theme.textTertiary }]}>@{comment.author.username}</Text>
-          </Pressable>
-          <Text style={[styles.timestamp, { color: theme.textTertiary }]}>{new Date(comment.createdAt).toLocaleDateString()}</Text>
+          </TouchableOpacity>
+          <Text style={[styles.timestamp, { color: theme.textTertiary }]}>{timeAgo(comment.createdAt)}</Text>
         </View>
-        <Pressable onPress={goToPost}>
+        <TouchableOpacity onPress={goToPost} activeOpacity={0.9}>
           <Text style={[styles.content, { color: theme.textPrimary }]}>{comment.content}</Text>
-        </Pressable>
+        </TouchableOpacity>
+        {comment.media && comment.media.length > 0 && (
+          <MediaGrid media={comment.media} onPress={goToPost} />
+        )}
         <ReactionBar
           postId={comment.id}
           onComment={handleCommentPress}
@@ -91,6 +95,13 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
             comments: comment.commentCount,
           }}
         />
+        {comment.commentCount > 0 && (
+          <TouchableOpacity onPress={goToPost} style={styles.viewRepliesContainer}>
+            <Text style={[styles.viewRepliesText, { color: theme.link }]}>
+              View {comment.commentCount} {comment.commentCount === 1 ? 'reply' : 'replies'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -140,6 +151,14 @@ const styles = StyleSheet.create({
   content: {
     marginTop: 5,
     lineHeight: 20,
+  },
+  viewRepliesContainer: {
+    marginTop: 8,
+    paddingLeft: 0,
+  },
+  viewRepliesText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

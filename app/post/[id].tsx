@@ -1,12 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { api } from '@/lib/api';
 import PostCard from '@/components/PostCard';
 import CommentCard from '@/components/CommentCard';
 import { Post, Comment } from '@/types/post';
 import { useTheme } from '@/theme/theme';
+import { eventEmitter } from '@/lib/EventEmitter';
 
 interface CommentWithDepth extends Comment {
   depth: number;
@@ -20,36 +22,72 @@ const PostDetailScreen = () => {
   const [listData, setListData] = useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const flattenReplies = (comments: Comment[], depth = 0): CommentWithDepth[] => {
-    let flattened: CommentWithDepth[] = [];
-    for (const comment of comments) {
-      flattened.push({ ...comment, depth });
-      if (comment.replies) {
-        flattened = flattened.concat(flattenReplies(comment.replies, depth + 1));
-      }
-    }
-    return flattened;
-  };
-
   useEffect(() => {
     if (id && typeof id === 'string') {
       setIsLoading(true);
-      api.fetchPost(id).then(fetchedPost => {
-        if (fetchedPost) {
-          const focalPost: ListItem = { ...fetchedPost, itemType: 'focal' };
-          const replies = flattenReplies(fetchedPost.comments || []).map(comment => ({
+      api.fetchPostWithLineage(id).then((res: { post: Post, parents: Post[] } | undefined) => {
+        if (res) {
+          const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
+          const focalPost: ListItem = { ...res.post, itemType: 'focal' };
+
+          // Only show direct replies (non-recursive) to hide deeper threads
+          const replies = (res.post.comments || []).map(comment => ({
             ...comment,
+            depth: 0,
             itemType: 'reply' as const,
           }));
-          setListData([focalPost, ...replies]);
+          setListData([...parents, focalPost, ...replies]);
         }
         setIsLoading(false);
       });
     }
-  }, [id]);
+
+    const handleNewComment = ({ parentId, comment }: { parentId: string, comment: Comment }) => {
+      // If the new comment is a reply to the focal post or one of its visible children
+      // For simplicity in the mock, we refresh the lineage if the parentId matches the focal post
+      // or if it's a child of the focal post.
+      if (id && (parentId === id || listData.some(item => item.id === parentId))) {
+        // Optimistically add it if it's a direct reply to focal post
+        if (parentId === id) {
+          const newReply: ListItem = { ...comment, depth: 0, itemType: 'reply' };
+          setListData(prev => {
+            const focalIndex = prev.findIndex(item => item.itemType === 'focal');
+            const nextListData = [...prev];
+            nextListData.splice(focalIndex + 1, 0, newReply);
+            return nextListData;
+          });
+        } else {
+          // If it's a nested reply, it's harder to place optimistically without more logic, 
+          // but we can at least refresh or append. For now, let's refresh.
+          api.fetchPostWithLineage(id as string).then(res => {
+            if (res) {
+              const parents = res.parents.map(p => ({ ...p, itemType: 'parent' as const }));
+              const focalPost: ListItem = { ...res.post, itemType: 'focal' };
+              const replies = (res.post.comments || []).map(c => ({
+                ...c,
+                depth: 0,
+                itemType: 'reply' as const,
+              }));
+              setListData([...parents, focalPost, ...replies]);
+            }
+          });
+        }
+      }
+    };
+
+    eventEmitter.on('newComment', handleNewComment);
+    return () => eventEmitter.off('newComment', handleNewComment);
+  }, [id, listData.length]); // listData.length to ensure we have the current state in the listener closure
 
   const renderItem = ({ item }: { item: ListItem }) => {
     switch (item.itemType) {
+      case 'parent':
+        return (
+          <View>
+            <PostCard post={item} />
+            <View style={[styles.threadLine, { backgroundColor: theme.border }]} />
+          </View>
+        );
       case 'focal':
         return (
           <View style={{ backgroundColor: theme.card }}>
@@ -57,30 +95,50 @@ const PostDetailScreen = () => {
           </View>
         );
       case 'reply':
-        return <CommentCard comment={item} indentationLevel={item.depth} />;
+        const isFirstReply = listData.findIndex(i => i.itemType === 'reply') === listData.indexOf(item);
+        return (
+          <View>
+            {isFirstReply && (
+              <View style={[styles.repliesHeader, { borderBottomColor: theme.borderLight }]}>
+                <Text style={[styles.repliesHeaderText, { color: theme.textSecondary }]}>Replies</Text>
+              </View>
+            )}
+            <CommentCard comment={item} indentationLevel={item.depth} />
+          </View>
+        );
       default:
         return null;
     }
   };
 
   if (isLoading) {
-    return <Text>Loading...</Text>;
+    return (
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
   }
 
   if (listData.length === 0) {
-    return <Text>Post not found.</Text>;
+    return (
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <Text style={{ color: theme.textSecondary }}>Post not found.</Text>
+      </View>
+    );
   }
 
   return (
-    <FlatList
-      data={listData}
-      renderItem={renderItem}
-      keyExtractor={item => `${item.itemType}-${item.id}`}
-      style={[styles.container, { backgroundColor: theme.background }]}
-      ListFooterComponent={() => (
-        listData.length === 1 ? <Text style={[styles.noRepliesText, { color: theme.textTertiary }]}>No replies yet</Text> : null
-      )}
-    />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['bottom']}>
+      <FlatList
+        data={listData}
+        renderItem={renderItem}
+        keyExtractor={item => `${item.itemType}-${item.id}`}
+        style={[styles.container, { backgroundColor: theme.background }]}
+        ListFooterComponent={() => (
+          listData.length === 1 ? <Text style={[styles.noRepliesText, { color: theme.textTertiary }]}>No replies yet</Text> : null
+        )}
+      />
+    </SafeAreaView>
   );
 };
 
@@ -88,9 +146,33 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  threadLine: {
+    position: 'absolute',
+    left: 39, // Center of avatar (15 padding + 24 radius)
+    top: 55, // Bottom of avatar
+    bottom: 0,
+    width: 2,
+    zIndex: -1,
+  },
+  repliesHeader: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  repliesHeaderText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   noRepliesText: {
     textAlign: 'center',
     padding: 20,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
