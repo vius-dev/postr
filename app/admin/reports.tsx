@@ -1,23 +1,39 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Report } from '@/types/reports';
-import { fetchAllReports, dismissReport, deletePost } from './api';
+import { fetchAllReports, dismissReport, deletePost, getPostById } from './api';
 import { Post } from '@/types/post';
-import { getPostById } from './api';
+import { useTheme } from '@/theme/theme';
+import { Ionicons } from '@expo/vector-icons';
+import MediaGrid from '@/components/MediaGrid';
 
 const ReportedPost = ({ postId }: { postId: string }) => {
   const [post, setPost] = useState<Post | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
 
   useEffect(() => {
-    getPostById(postId).then(setPost);
+    getPostById(postId).then(p => {
+      setPost(p);
+      setLoading(false);
+    });
   }, [postId]);
 
-  if (!post) return <Text style={styles.postContent}>Loading post...</Text>;
+  if (loading) return <ActivityIndicator size="small" color={theme.primary} style={{ marginVertical: 10 }} />;
+  if (!post) return <Text style={[styles.emptyText, { color: theme.error, marginVertical: 10 }]}>Post not found or already deleted.</Text>;
 
   return (
-    <View style={styles.postContainer}>
-        <Text style={styles.postContent}>Reported Post: "{post.content}"</Text>
+    <View style={[styles.postContainer, { backgroundColor: theme.borderLight + '50', borderColor: theme.borderLight }]}>
+      <View style={styles.postHeader}>
+        <Ionicons name="document-text-outline" size={16} color={theme.textTertiary} />
+        <Text style={[styles.postAuthor, { color: theme.textSecondary }]}>{post.author.name} · @{post.author.username}</Text>
+      </View>
+      <Text style={[styles.postContent, { color: theme.textPrimary }]}>{post.content}</Text>
+      {post.media && post.media.length > 0 && (
+        <View style={styles.mediaPreview}>
+          <MediaGrid media={post.media} />
+        </View>
+      )}
     </View>
   )
 }
@@ -25,13 +41,18 @@ const ReportedPost = ({ postId }: { postId: string }) => {
 export default function ReportsScreen() {
   const [reports, setReports] = useState<Report[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
 
   const loadReports = async () => {
     try {
+      setLoading(true);
       const fetchedReports = await fetchAllReports();
       setReports(fetchedReports);
     } catch (error) {
       Alert.alert('Error', 'Could not fetch reports.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -42,51 +63,73 @@ export default function ReportsScreen() {
   const handleDismiss = async (reportId: string) => {
     try {
       await dismissReport(reportId);
-      loadReports(); // Refresh the list
+      loadReports();
     } catch (error) {
       Alert.alert('Error', 'Could not dismiss the report.');
     }
   };
 
   const handleDeletePost = async (postId: string) => {
-    try {
-      await deletePost(postId);
-      loadReports(); // Refresh the list
-    } catch (error) {
-      Alert.alert('Error', 'Could not delete the post.');
-    }
+    Alert.alert('Confirm Delete', 'Delete this reported post?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deletePost(postId);
+            loadReports();
+          } catch (error) {
+            Alert.alert('Error', 'Could not delete the post.');
+          }
+        }
+      }
+    ]);
   };
 
   const filteredReports = useMemo(() => {
     if (!searchTerm) return reports;
-    return reports.filter(report => 
-        report.reporterId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (report.reason && report.reason.toLowerCase().includes(searchTerm.toLowerCase()))
+    const term = searchTerm.toLowerCase();
+    return reports.filter(report =>
+      report.reporterId.toLowerCase().includes(term) ||
+      (report.reason && report.reason.toLowerCase().includes(term)) ||
+      report.reportType.toLowerCase().includes(term)
     );
   }, [reports, searchTerm]);
 
   const renderItem = ({ item }: { item: Report }) => (
-    <View style={styles.reportContainer}>
-      <Text style={styles.reportText}>Report ID: {item.id}</Text>
-      <Text style={styles.reportText}>Entity Type: {item.entityType}</Text>
-      <Text style={styles.reportText}>Entity ID: {item.entityId}</Text>
-      <Text style={styles.reportText}>Report Type: {item.reportType}</Text>
-      <Text style={styles.reportText}>Reporter ID: {item.reporterId}</Text>
-      {item.reason && <Text style={styles.reportText}>Reason: {item.reason}</Text>}
+    <View style={[styles.reportCard, { backgroundColor: theme.card, borderBottomColor: theme.borderLight }]}>
+      <View style={styles.reportHeader}>
+        <View style={[styles.reportTypeBadge, { backgroundColor: theme.primary + '15' }]}>
+          <Text style={[styles.reportTypeText, { color: theme.primary }]}>{item.reportType}</Text>
+        </View>
+        <Text style={[styles.dateText, { color: theme.textTertiary }]}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+      </View>
 
-      {/* Show post content for context */}
+      <View style={styles.reporterInfo}>
+        <Ionicons name="person-circle-outline" size={16} color={theme.textTertiary} />
+        <Text style={[styles.reporterText, { color: theme.textSecondary }]}> Reported by: {item.reporterId}</Text>
+      </View>
+
+      {item.reason && (
+        <View style={[styles.reasonBox, { borderLeftColor: theme.primary }]}>
+          <Text style={[styles.reasonText, { color: theme.textPrimary }]}>{item.reason}</Text>
+        </View>
+      )}
+
       {item.entityType === 'POST' && <ReportedPost postId={item.entityId} />}
 
       <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.button} onPress={() => handleDismiss(item.id)}>
-          <Text style={styles.buttonText}>Dismiss</Text>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: theme.borderLight }]}
+          onPress={() => handleDismiss(item.id)}
+        >
+          <Text style={[styles.actionButtonText, { color: theme.textPrimary }]}>Dismiss</Text>
         </TouchableOpacity>
         {item.entityType === 'POST' && (
           <TouchableOpacity
-            style={[styles.button, styles.deleteButton]}
+            style={[styles.actionButton, { backgroundColor: theme.error + '15' }]}
             onPress={() => handleDeletePost(item.entityId)}
           >
-            <Text style={styles.buttonText}>Delete Post</Text>
+            <Text style={[styles.actionButtonText, { color: theme.error }]}>Delete Post</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -94,19 +137,34 @@ export default function ReportsScreen() {
   );
 
   return (
-    <View style={styles.container}>
-        <TextInput 
-            style={styles.searchBar}
-            placeholder="Search by reporter ID or reason..."
-            value={searchTerm}
-            onChangeText={setSearchTerm}
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={styles.searchHeader}>
+        <Ionicons name="search" size={20} color={theme.textTertiary} style={styles.searchIcon} />
+        <TextInput
+          style={[styles.searchBar, { color: theme.textPrimary, backgroundColor: theme.borderLight }]}
+          placeholder="Search reports..."
+          placeholderTextColor={theme.textTertiary}
+          value={searchTerm}
+          onChangeText={setSearchTerm}
         />
-      <FlatList
-        data={filteredReports}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-      />
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
+      ) : (
+        <FlatList
+          data={filteredReports}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="flag-outline" size={64} color={theme.textTertiary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No reports found.</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -114,53 +172,114 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
-  list: {
-    padding: 10,
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: 25,
+    zIndex: 1,
   },
   searchBar: {
-      backgroundColor: 'white',
-      padding: 15,
-      margin: 10,
-      borderRadius: 10,
-      fontSize: 16,
+    flex: 1,
+    height: 45,
+    paddingLeft: 45,
+    borderRadius: 25,
+    fontSize: 16,
   },
-  reportContainer: {
-    backgroundColor: 'white',
+  list: {
+    paddingHorizontal: 15,
+    paddingBottom: 20,
+  },
+  reportCard: {
     padding: 15,
-    borderRadius: 10,
+    borderRadius: 15,
+    marginBottom: 15,
+    borderBottomWidth: 1,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
   },
-  reportText: {
-    fontSize: 16,
-    marginBottom: 5,
+  reportTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  reportTypeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  dateText: {
+    fontSize: 12,
+  },
+  reporterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  reporterText: {
+    fontSize: 13,
+  },
+  reasonBox: {
+    borderLeftWidth: 3,
+    paddingLeft: 10,
+    marginBottom: 15,
+  },
+  reasonText: {
+    fontSize: 14,
+    fontStyle: 'italic',
   },
   actionsContainer: {
     flexDirection: 'row',
-    marginTop: 10,
+    marginTop: 15,
   },
-  button: {
-    backgroundColor: '#007bff',
-    padding: 10,
-    borderRadius: 5,
+  actionButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
     marginRight: 10,
   },
-  deleteButton: {
-    backgroundColor: '#dc3545',
-  },
-  buttonText: {
-    color: 'white',
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
     textAlign: 'center',
   },
   postContainer: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 5
+    marginTop: 5,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  postAuthor: {
+    fontSize: 12,
+    marginLeft: 6,
   },
   postContent: {
     fontSize: 14,
-    color: '#333'
-  }
+    lineHeight: 20,
+  },
+  mediaPreview: {
+    marginTop: 10,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 100,
+  },
+  emptyText: {
+    marginTop: 15,
+    fontSize: 16,
+  },
 });
