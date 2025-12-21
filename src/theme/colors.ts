@@ -1,179 +1,196 @@
 /**
- * Color system for Twitter-like application
- * Based on Twitter/X's design language with light/dark theme support
+ * Overhauled Color System
+ * Teal-first, no blues, inverted contrast philosophy
+ * Primary: #2cc9b3
  */
 
-// Core Twitter-inspired colors (X platform)
-export const twitterColors = {
-  // Twitter Blue variations (primary brand color)
-  blue: {
-    50:  '#E8F4FD',
-    100: '#D1E9FA',
-    200: '#A3D3F5',
-    300: '#75BCF0',
-    400: '#47A6EB',
-    500: '#1D9BF0', // Primary Twitter Blue
-    600: '#1A8CD8',
-    700: '#177CC0',
-    800: '#146BA8',
-    900: '#115B90',
+/* -----------------------------------------------------
+ * Core Brand Palette (No Blues)
+ * --------------------------------------------------- */
+
+export const brandColors = {
+  primary: {
+    50: '#E6FAF7',
+    100: '#C8F2EC',
+    200: '#9BE6DB',
+    300: '#6EDACA',
+    400: '#45D0BC',
+    500: '#2CC9B3', // PRIMARY
+    600: '#25B3A0',
+    700: '#1F9C8C',
+    800: '#1A8578',
+    900: '#146B61',
   },
-  
-  // Twitter/X Black & White
-  black: '#000000',
-  white: '#FFFFFF',
-  
-  // Twitter Gray scale
-  gray: {
-    50:  '#F7F9F9',
-    100: '#EFF3F4',
-    200: '#E7ECED',
-    300: '#CFD9DE',
-    400: '#8B98A5',
-    500: '#71767B', // Default text gray
-    600: '#5C646A',
-    700: '#464F55',
-    800: '#31363B',
-    900: '#1A1D21',
+
+  /* Neutral tones (teal-tinted, not Twitter gray) */
+  neutral: {
+    50: '#F6F9F8',
+    100: '#EEF2F1',
+    200: '#E2E8E6',
+    300: '#CBD6D2',
+    400: '#9FB2AD',
+    500: '#7A918C',
+    600: '#5E7570',
+    700: '#445B56',
+    800: '#2C3F3A',
+    900: '#1A2925',
   },
-  
-  // Twitter Accent colors
+
+  /* Soft black & off-white (no pure extremes) */
+  ink: '#0F1F1C',
+  paper: '#FAFEFD',
+
+  /* Accents */
   red: {
-    500: '#F91880', // Like/Heart color
-    600: '#E01673',
+    500: '#E5484D',
+    600: '#CC3E43',
   },
   green: {
-    500: '#00BA7C', // Success/Retweet color
-    600: '#00A76F',
+    500: '#3BCF8E',
+    600: '#2FB07A',
   },
-  yellow: {
-    500: '#FFD400', // Highlight/Bookmark
-    600: '#E6BF00',
+  amber: {
+    500: '#F4B740',
+    600: '#D9A233',
   },
 };
 
-// Semantic color tokens
+
+/* -----------------------------------------------------
+ * Semantic Tokens (Upside-Down Philosophy)
+ * --------------------------------------------------- */
+
 export const semanticColors = {
   light: {
-    // Primary colors
-    primary: twitterColors.blue[500],
-    primaryHover: twitterColors.blue[600],
-    primaryDisabled: twitterColors.blue[300],
-    
-    // Background colors
-    background: twitterColors.white,
-    backgroundSecondary: twitterColors.gray[50],
-    backgroundTertiary: twitterColors.gray[100],
-    
-    // Surface colors
-    surface: twitterColors.white,
-    surfaceHover: twitterColors.gray[50],
-    surfaceActive: twitterColors.gray[100],
-    surfaceDisabled: twitterColors.gray[200],
-    
-    // Text colors
-    textPrimary: twitterColors.black,
-    textSecondary: twitterColors.gray[700],
-    textTertiary: twitterColors.gray[500],
-    textDisabled: twitterColors.gray[400],
-    textInverse: twitterColors.white,
-    
-    // Border colors
-    border: twitterColors.gray[300],
-    borderLight: twitterColors.gray[200],
-    borderHeavy: twitterColors.gray[400],
-    
-    // Interactive colors
-    link: twitterColors.blue[500],
-    linkHover: twitterColors.blue[600],
-    focusRing: twitterColors.blue[300],
-    
-    // Status colors
-    success: twitterColors.green[500],
-    error: twitterColors.red[500],
-    warning: twitterColors.yellow[500],
-    info: twitterColors.blue[500],
-    
-    // Social interaction colors (Twitter specific)
-    like: twitterColors.red[500],
-    retweet: twitterColors.green[500],
-    bookmark: twitterColors.yellow[500],
-    share: twitterColors.blue[500],
-    
-    // Component-specific colors
-    inputBackground: twitterColors.white,
-    inputBorder: twitterColors.gray[300],
-    inputPlaceholder: twitterColors.gray[400],
-    
-    // Card colors
-    card: twitterColors.white,
-    cardHover: twitterColors.gray[50],
-    cardBorder: twitterColors.gray[200],
+    /* Primary */
+    primary: brandColors.primary[600],
+    primaryHover: brandColors.primary[700],
+    primaryDisabled: brandColors.primary[300],
+
+    /* Backgrounds (not pure white) */
+    background: brandColors.paper,
+    backgroundSecondary: brandColors.neutral[50],
+    backgroundTertiary: brandColors.neutral[100],
+
+    /* Surfaces */
+    surface: brandColors.neutral[100],
+    surfaceHover: brandColors.neutral[200],
+    surfaceActive: brandColors.neutral[300],
+    surfaceDisabled: brandColors.neutral[200],
+
+    /* Text (softer contrast) */
+    textPrimary: brandColors.ink,
+    textSecondary: brandColors.neutral[700],
+    textTertiary: brandColors.neutral[500],
+    textDisabled: brandColors.neutral[400],
+    textInverse: brandColors.paper,
+
+    /* Borders */
+    border: brandColors.neutral[300],
+    borderLight: brandColors.neutral[200],
+    borderHeavy: brandColors.neutral[400],
+
+    /* Interactions */
+    link: brandColors.primary[600],
+    linkHover: brandColors.primary[700],
+    focusRing: brandColors.primary[400],
+
+    /* Status */
+    success: brandColors.green[500],
+    error: brandColors.red[500],
+    warning: brandColors.amber[500],
+    info: brandColors.primary[500],
+
+    /* Social */
+    like: brandColors.red[500],
+    repost: brandColors.green[500],
+    bookmark: brandColors.amber[500],
+    share: brandColors.primary[600],
+
+    /* Inputs */
+    inputBackground: brandColors.paper,
+    inputBorder: brandColors.neutral[300],
+    inputPlaceholder: brandColors.neutral[400],
+
+    /* Cards */
+    card: brandColors.paper,
+    cardHover: brandColors.neutral[100],
+    cardBorder: brandColors.neutral[200],
+
+    /* Overlays */
+    overlay: 'rgba(0, 0, 0, 0.4)',
   },
-  
+
   dark: {
-    // Primary colors
-    primary: twitterColors.blue[500],
-    primaryHover: twitterColors.blue[400],
-    primaryDisabled: twitterColors.blue[800],
-    
-    // Background colors
-    background: twitterColors.black,
-    backgroundSecondary: twitterColors.gray[900],
-    backgroundTertiary: twitterColors.gray[800],
-    
-    // Surface colors
-    surface: twitterColors.gray[900],
-    surfaceHover: twitterColors.gray[800],
-    surfaceActive: twitterColors.gray[700],
-    surfaceDisabled: twitterColors.gray[600],
-    
-    // Text colors
-    textPrimary: twitterColors.white,
-    textSecondary: twitterColors.gray[300],
-    textTertiary: twitterColors.gray[400],
-    textDisabled: twitterColors.gray[500],
-    textInverse: twitterColors.black,
-    
-    // Border colors
-    border: twitterColors.gray[700],
-    borderLight: twitterColors.gray[800],
-    borderHeavy: twitterColors.gray[600],
-    
-    // Interactive colors
-    link: twitterColors.blue[400],
-    linkHover: twitterColors.blue[300],
-    focusRing: twitterColors.blue[700],
-    
-    // Status colors
-    success: twitterColors.green[500],
-    error: twitterColors.red[500],
-    warning: twitterColors.yellow[500],
-    info: twitterColors.blue[500],
-    
-    // Social interaction colors (Twitter specific)
-    like: twitterColors.red[500],
-    retweet: twitterColors.green[500],
-    bookmark: twitterColors.yellow[500],
-    share: twitterColors.blue[500],
-    
-    // Component-specific colors
-    inputBackground: twitterColors.gray[900],
-    inputBorder: twitterColors.gray[700],
-    inputPlaceholder: twitterColors.gray[500],
-    
-    // Card colors
-    card: twitterColors.gray[900],
-    cardHover: twitterColors.gray[800],
-    cardBorder: twitterColors.gray[700],
+    /* Primary pops more in dark */
+    primary: brandColors.primary[400],
+    primaryHover: brandColors.primary[300],
+    primaryDisabled: brandColors.primary[800],
+
+    /* Backgrounds (not pure black) */
+    background: brandColors.neutral[900],
+    backgroundSecondary: brandColors.neutral[800],
+    backgroundTertiary: brandColors.neutral[700],
+
+    /* Surfaces */
+    surface: brandColors.neutral[800],
+    surfaceHover: brandColors.neutral[700],
+    surfaceActive: brandColors.neutral[600],
+    surfaceDisabled: brandColors.neutral[700],
+
+    /* Text */
+    textPrimary: brandColors.paper,
+    textSecondary: brandColors.neutral[300],
+    textTertiary: brandColors.neutral[400],
+    textDisabled: brandColors.neutral[500],
+    textInverse: brandColors.ink,
+
+    /* Borders */
+    border: brandColors.neutral[700],
+    borderLight: brandColors.neutral[800],
+    borderHeavy: brandColors.neutral[600],
+
+    /* Interactions */
+    link: brandColors.primary[400],
+    linkHover: brandColors.primary[300],
+    focusRing: brandColors.primary[600],
+
+    /* Status */
+    success: brandColors.green[500],
+    error: brandColors.red[500],
+    warning: brandColors.amber[500],
+    info: brandColors.primary[400],
+
+    /* Social */
+    like: brandColors.red[500],
+    repost: brandColors.green[500],
+    bookmark: brandColors.amber[500],
+    share: brandColors.primary[400],
+
+    /* Inputs */
+    inputBackground: brandColors.neutral[800],
+    inputBorder: brandColors.neutral[600],
+    inputPlaceholder: brandColors.neutral[500],
+
+    /* Cards */
+    card: brandColors.neutral[800],
+    cardHover: brandColors.neutral[700],
+    cardBorder: brandColors.neutral[600],
+
+    /* Overlays */
+    overlay: 'rgba(0, 0, 0, 0.6)',
   },
 };
 
-// Legacy API for backward compatibility
+
+/* -----------------------------------------------------
+ * Legacy Compatibility
+ * --------------------------------------------------- */
+
 export const colors = {
   light: {
     primary: semanticColors.light.primary,
-    secondary: twitterColors.gray[500], // Using gray as secondary for Twitter-like design
+    secondary: brandColors.neutral[600],
     background: semanticColors.light.background,
     text: semanticColors.light.textPrimary,
     card: semanticColors.light.card,
@@ -181,7 +198,7 @@ export const colors = {
   },
   dark: {
     primary: semanticColors.dark.primary,
-    secondary: twitterColors.gray[400], // Using gray as secondary for Twitter-like design
+    secondary: brandColors.neutral[400],
     background: semanticColors.dark.background,
     text: semanticColors.dark.textPrimary,
     card: semanticColors.dark.card,
@@ -189,110 +206,36 @@ export const colors = {
   },
 };
 
-// Type definitions
+
+/* -----------------------------------------------------
+ * Types & Helpers (unchanged API)
+ * --------------------------------------------------- */
+
 export type ThemeMode = 'light' | 'dark';
-export type ColorScale = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
-export type TwitterBlueScale = Record<ColorScale, string>;
-export type TwitterGrayScale = Record<ColorScale, string>;
+export type SemanticTheme = typeof semanticColors.light;
 
-export interface TwitterColors {
-  blue: TwitterBlueScale;
-  black: string;
-  white: string;
-  gray: TwitterGrayScale;
-  red: { 500: string; 600: string };
-  green: { 500: string; 600: string };
-  yellow: { 500: string; 600: string };
-}
 
-export interface SemanticTheme {
-  [x: string]: string | undefined;
-  primary: string;
-  primaryHover: string;
-  primaryDisabled: string;
-  background: string;
-  backgroundSecondary: string;
-  backgroundTertiary: string;
-  surface: string;
-  surfaceHover: string;
-  surfaceActive: string;
-  surfaceDisabled: string;
-  textPrimary: string;
-  textSecondary: string;
-  textTertiary: string;
-  textDisabled: string;
-  textInverse: string;
-  border: string;
-  borderLight: string;
-  borderHeavy: string;
-  link: string;
-  linkHover: string;
-  focusRing: string;
-  success: string;
-  error: string;
-  warning: string;
-  info: string;
-  like: string;
-  retweet: string;
-  bookmark: string;
-  share: string;
-  inputBackground: string;
-  inputBorder: string;
-  inputPlaceholder: string;
-  card: string;
-  cardHover: string;
-  cardBorder: string;
-}
-
-export interface ColorSystem {
-  twitter: TwitterColors;
-  semantic: {
-    light: SemanticTheme;
-    dark: SemanticTheme;
-  };
-  legacy: {
-    light: {
-      primary: string;
-      secondary: string;
-      background: string;
-      text: string;
-      card: string;
-      border: string;
-    };
-    dark: {
-      primary: string;
-      secondary: string;
-      background: string;
-      text: string;
-      card: string;
-      border: string;
-    };
-  };
-}
-
-// Helper functions
-export const getThemeColors = (mode: ThemeMode = 'light'): SemanticTheme => {
+export const getThemeColors = (mode: ThemeMode = 'light') => {
   return semanticColors[mode];
 };
 
 export const getColor = (path: string, mode: ThemeMode = 'light'): string => {
-  const paths = path.split('.');
+  const parts = path.split('.');
   let current: any = semanticColors[mode];
-  
-  for (const p of paths) {
+
+  for (const p of parts) {
     if (current[p] === undefined) {
       console.warn(`Color path "${path}" not found in ${mode} theme`);
       return semanticColors[mode].primary;
     }
     current = current[p];
   }
-  
+
   return current;
 };
 
-// Export the complete color system
-const colorSystem: ColorSystem = {
-  twitter: twitterColors,
+const colorSystem = {
+  brand: brandColors,
   semantic: semanticColors,
   legacy: colors,
 };

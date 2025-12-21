@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert } from 'react-native';
 import { Poll } from '@/types/poll';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
@@ -33,8 +33,28 @@ export default function PollView({ poll: initialPoll, postId }: PollViewProps) {
       if (updatedPost.poll) {
         setPoll(updatedPost.poll);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to vote:', error);
+
+      const errorMessage = error.message || 'An unexpected error occurred';
+
+      Alert.alert(
+        'Poll Error',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
+
+      // [RULE 8] Fallback: Fetch existing state if we are out of sync
+      if (errorMessage.includes('already voted')) {
+        try {
+          const freshPost = await api.fetchPost(postId);
+          if (freshPost?.poll) {
+            setPoll(freshPost.poll);
+          }
+        } catch (fetchError) {
+          console.error('Failed to sync poll state:', fetchError);
+        }
+      }
     } finally {
       setIsVoting(false);
     }
@@ -69,7 +89,7 @@ export default function PollView({ poll: initialPoll, postId }: PollViewProps) {
                   styles.progressBar,
                   {
                     width: `${percentage}%`,
-                    backgroundColor: isUserChoice ? theme.primary + '33' : theme.borderLight
+                    backgroundColor: choice.color ? choice.color + '33' : theme.borderLight
                   }
                 ]}
               />

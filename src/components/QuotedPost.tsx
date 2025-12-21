@@ -6,6 +6,7 @@ import { useTheme } from '@/theme/theme';
 import { useRouter } from 'expo-router';
 
 import MediaGrid from './MediaGrid';
+import PollView from '@/components/PollView';
 
 interface QuotedPostProps {
   post: Post;
@@ -40,6 +41,11 @@ const QuotedPost = ({ post }: QuotedPostProps) => {
         ) : null}
         {post.media && post.media.length > 0 && (
           <MediaGrid media={post.media} onPress={goToPost} />
+        )}
+        {post.poll && (
+          <View style={{ marginTop: 8 }}>
+            <PollView poll={post.poll} postId={post.id} />
+          </View>
         )}
       </View>
     </Pressable>

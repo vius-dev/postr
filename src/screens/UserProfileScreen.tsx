@@ -14,6 +14,7 @@ import ProfileStats from '@/components/profile/ProfileStats';
 import ProfileActionRow, { ViewerRelationship } from '@/components/profile/ProfileActionRow';
 import ProfileTabs, { ProfileTab } from '@/components/profile/ProfileTabs';
 import PostCard from '@/components/PostCard';
+import { eventEmitter } from '@/lib/EventEmitter';
 
 const currentUserId = '0';
 
@@ -175,6 +176,20 @@ export default function UserProfileScreen() {
     };
     fetchTabData();
   }, [selectedTab, user]);
+
+  useEffect(() => {
+    const handlePostDeleted = (deletedPostId: string) => {
+      const filter = (p: Post) => p.id !== deletedPostId;
+      setPosts(prev => prev.filter(filter));
+      setReplies(prev => prev.filter(filter));
+      setMedia(prev => prev.filter(filter));
+      setReactions(prev => prev.filter(filter));
+      setBookmarks(prev => prev.filter(filter));
+    };
+
+    eventEmitter.on('postDeleted', handlePostDeleted);
+    return () => eventEmitter.off('postDeleted', handlePostDeleted);
+  }, []);
 
   const handleFollow = async () => {
     if (!user) return;

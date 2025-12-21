@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/theme/theme';
+import { brandColors } from '@/theme/colors';
 
 const HomeHeader = () => {
   const { theme } = useTheme();
@@ -15,7 +16,7 @@ const styles = StyleSheet.create({
   header: {
     padding: 15,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    borderBottomColor: brandColors.primary[700],
     alignItems: 'center',
   },
   headerTitle: {

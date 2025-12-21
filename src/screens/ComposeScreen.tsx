@@ -37,11 +37,11 @@ export default function ComposeScreen() {
           value={text}
           onChangeText={setText}
           placeholder={quotePostId ? 'Add a comment' : "What's happening?"}
-          style={[styles.input, { color: theme.text }]}
+          style={[styles.input, { color: theme.textPrimary }]}
           multiline
         />
         <View style={styles.footer}>
-          <Text style={[styles.charCount, { color: charCount > 280 ? 'red' : theme.secondary }]}>
+          <Text style={[styles.charCount, { color: charCount > 280 ? 'red' : theme.textSecondary }]}>
             {charCount} / 280
           </Text>
           <TouchableOpacity

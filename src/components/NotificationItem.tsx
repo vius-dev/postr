@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Notification } from '@/types/notification';
 import { useTheme } from '@/theme/theme';
 import { useRouter } from 'expo-router';
+import { brandColors } from '@/theme/colors';
 
 interface NotificationItemProps {
     notification: Notification;
@@ -17,7 +18,7 @@ export default function NotificationItem({ notification }: NotificationItemProps
     const renderIcon = () => {
         switch (notification.type) {
             case 'REACTION':
-                return <Ionicons name="heart" size={24} color="#E0245E" />;
+                return <Ionicons name="heart" size={24} color={brandColors.red[500]} />;
             case 'REPOST':
                 return <MaterialCommunityIcons name="repeat" size={24} color={theme.primary} />;
             case 'FOLLOW':

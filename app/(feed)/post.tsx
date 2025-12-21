@@ -3,9 +3,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
+import { useTheme } from '@/theme/theme';
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
+  const { theme } = useTheme();
   const [comment, setComment] = useState('');
 
   // Placeholder for post data
@@ -23,7 +25,7 @@ export default function PostDetailScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['bottom']}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -31,33 +33,34 @@ export default function PostDetailScreen() {
       >
         <ScrollView style={styles.scrollContainer}>
           {/* Original Post */}
-          <View style={styles.postContainer}>
-            <Text style={styles.author}>{post.author.name}</Text>
-            <Text style={styles.content}>{post.content}</Text>
+          <View style={[styles.postContainer, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+            <Text style={[styles.author, { color: theme.textPrimary }]}>{post.author.name}</Text>
+            <Text style={[styles.content, { color: theme.textPrimary }]}>{post.content}</Text>
           </View>
 
           {/* Comments Section */}
           <View style={styles.commentsSection}>
-            <Text style={styles.commentsHeader}>Comments</Text>
+            <Text style={[styles.commentsHeader, { color: theme.textPrimary }]}>Comments</Text>
             {comments.map(c => (
-              <View key={c.id} style={styles.commentContainer}>
-                <Text style={styles.commentAuthor}>{c.author.name}</Text>
-                <Text>{c.content}</Text>
+              <View key={c.id} style={[styles.commentContainer, { backgroundColor: theme.backgroundSecondary }]}>
+                <Text style={[styles.commentAuthor, { color: theme.textPrimary }]}>{c.author.name}</Text>
+                <Text style={{ color: theme.textSecondary }}>{c.content}</Text>
               </View>
             ))}
           </View>
         </ScrollView>
 
         {/* Comment Input */}
-        <View style={styles.commentInputContainer}>
+        <View style={[styles.commentInputContainer, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
           <TextInput
-            style={styles.commentInput}
+            style={[styles.commentInput, { borderColor: theme.borderHeavy, color: theme.textPrimary }]}
             placeholder="Write a comment..."
+            placeholderTextColor={theme.textTertiary}
             value={comment}
             onChangeText={setComment}
           />
-          <TouchableOpacity style={styles.sendButton}>
-            <Text style={styles.sendButtonText}>Send</Text>
+          <TouchableOpacity style={[styles.sendButton, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.sendButtonText, { color: theme.textInverse }]}>Send</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -68,15 +71,13 @@ export default function PostDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: 'transparent',
   },
   scrollContainer: {
     flex: 1,
   },
   postContainer: {
     padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   author: {
     fontWeight: 'bold',
@@ -95,7 +96,6 @@ const styles = StyleSheet.create({
   },
   commentContainer: {
     marginBottom: 10,
-    backgroundColor: '#f9f9f9',
     padding: 10,
     borderRadius: 5,
   },
@@ -106,27 +106,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: 'white',
     alignItems: 'center',
   },
   commentInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
     marginRight: 10,
   },
   sendButton: {
-    backgroundColor: '#1DA1F2',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
   },
   sendButtonText: {
-    color: 'white',
     fontWeight: 'bold',
   },
 });

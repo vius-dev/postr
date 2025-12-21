@@ -798,6 +798,14 @@ const feedEngine = new FeedEngine({
 // POST HYDRATION - INJECT VIEWER-SPECIFIC DATA
 // =============================================================================
 
+// = [RULE 6] Canonical Poll Resolution Logic =
+const getCanonicalId = (id: string): string => {
+  if (id.startsWith('repost:')) {
+    return id.split(':')[1];
+  }
+  return id;
+};
+
 /**
  * Hydrate a post with viewer-specific information
  * This adds the viewer's reaction state, repost status, and real-time counts
@@ -807,17 +815,18 @@ const feedEngine = new FeedEngine({
  * @returns Hydrated post with viewer-specific data
  */
 const hydratePost = (post: Post, viewerId: string = CURRENT_USER_ID): Post => {
-  const postReactions = reactionsMap.get(post.id);
+  const canonicalId = getCanonicalId(post.id);
+  const postReactions = reactionsMap.get(canonicalId);
   const userReaction = postReactions?.get(viewerId) || 'NONE';
-  const isReposted = repostsMap.get(post.id)?.has(viewerId) || false;
-  const isBookmarked = bookmarksMap.get(viewerId)?.has(post.id) || false;
+  const isReposted = repostsMap.get(canonicalId)?.has(viewerId) || false;
+  const isBookmarked = bookmarksMap.get(viewerId)?.has(canonicalId) || false;
 
-  // Calculate real-time counts from interaction maps
+  // Calculate real-time counts from interaction maps (scoped to canonical ID)
   const reactionsByType = Array.from(postReactions?.values() || []);
   const additionalLikes = reactionsByType.filter(r => r === 'LIKE').length;
   const additionalDislikes = reactionsByType.filter(r => r === 'DISLIKE').length;
   const additionalLaughs = reactionsByType.filter(r => r === 'LAUGH').length;
-  const additionalReposts = repostsMap.get(post.id)?.size || 0;
+  const additionalReposts = repostsMap.get(canonicalId)?.size || 0;
 
   // Merge base counts with real-time interaction counts
   const hydrated: Post = {
@@ -833,7 +842,7 @@ const hydratePost = (post: Post, viewerId: string = CURRENT_USER_ID): Post => {
 
   // Hydrate poll data if present
   if (hydrated.poll) {
-    const userVotes = pollVotesMap.get(post.id);
+    const userVotes = pollVotesMap.get(canonicalId);
     const userVoteIndex = userVotes?.get(viewerId);
     const totalVotes = hydrated.poll.choices.reduce((sum, choice) => sum + (choice.vote_count || 0), 0);
 
@@ -845,6 +854,10 @@ const hydratePost = (post: Post, viewerId: string = CURRENT_USER_ID): Post => {
   }
 
   // Recursively hydrate nested content
+  if (hydrated.quotedPost) {
+    hydrated.quotedPost = hydratePost(hydrated.quotedPost, viewerId);
+  }
+
   if (hydrated.comments) {
     hydrated.comments = hydrated.comments.map(c => hydratePost(c as Post, viewerId) as Comment);
   }
@@ -1690,10 +1703,10 @@ export const api = {
    * SQL: INSERT INTO posts (id, author_id, content, poll_data, ...) VALUES (...)
    * TRIGGER: on_post_insert -> Increment profile stats, notify mentions, parse hashtags.
    * EDGE: fan_out_notifications -> Push to all active followers.
-   * @param poll - Poll data (question and choices)
+   * @param poll - Poll data (question, choices, and optional duration)
    * @returns Newly created poll post
    */
-  createPoll: async (poll: { question: string, choices: PollChoice[] }): Promise<Post> => {
+  createPoll: async (poll: { question: string, choices: PollChoice[], durationSeconds?: number }): Promise<Post> => {
     // Rate limiting
     if (!postRateLimiter.canPerformAction()) {
       throw new Error(postRateLimiter.getStatusMessage());
@@ -1719,7 +1732,7 @@ export const api = {
         choices: poll.choices.map(c => ({ ...c, vote_count: 0 })),
         question: poll.question,
         totalVotes: 0,
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString() // 24h default
+        expiresAt: new Date(Date.now() + (poll.durationSeconds || 24 * 60 * 60) * 1000).toISOString()
       },
       createdAt: new Date().toISOString(),
       likeCount: 0,
@@ -1733,6 +1746,12 @@ export const api = {
     allPosts.unshift(newPost);
     feedEngine.invalidateCache(CURRENT_USER_ID);
 
+    // [RULE 3, 7] Poll belongs to the poll entity, but in this mock it's identified by postId.
+    // Ensure the poll votes map is initialized.
+    if (!pollVotesMap.has(newPost.id)) {
+      pollVotesMap.set(newPost.id, new Map());
+    }
+
     console.log(`[Poll] Created poll ${newPost.id}`);
     return hydratePost(newPost);
   },
@@ -1744,7 +1763,8 @@ export const api = {
    * @returns Updated poll post
    */
   votePoll: async (postId: string, choiceIndex: number): Promise<Post> => {
-    const post = allPosts.find(p => p.id === postId);
+    const canonicalId = getCanonicalId(postId);
+    const post = allPosts.find(p => p.id === canonicalId);
     if (!post || !post.poll) {
       throw new Error('Poll not found');
     }
@@ -1754,19 +1774,18 @@ export const api = {
     }
 
     // Track user's vote
-    if (!pollVotesMap.has(postId)) {
-      pollVotesMap.set(postId, new Map());
+    if (!pollVotesMap.has(canonicalId)) {
+      pollVotesMap.set(canonicalId, new Map());
     }
 
-    const votes = pollVotesMap.get(postId)!;
-    const previousVote = votes.get(CURRENT_USER_ID);
+    const votes = pollVotesMap.get(canonicalId)!;
 
-    // Remove previous vote if exists
-    if (previousVote !== undefined && post.poll.choices[previousVote]) {
-      post.poll.choices[previousVote].vote_count--;
+    // RULE 1, 4, 5, 8: Final, immutable vote. No re-voting or editing.
+    if (votes.has(CURRENT_USER_ID)) {
+      throw new Error('You have already voted in this poll. Votes are immutable.');
     }
 
-    // Add new vote
+    // Add new vote (Append-only as per Rule 5)
     votes.set(CURRENT_USER_ID, choiceIndex);
     post.poll.choices[choiceIndex].vote_count++;
 
@@ -1792,9 +1811,19 @@ export const api = {
     }
 
     // Remove from main array
+    allPosts.splice(index, 1);
+
+    // Clean up related data
     bookmarksMap.forEach(bookmarks => bookmarks.delete(postId));
 
+    // [RULE 5, 7] DO NOT cleanup pollVotesMap. 
+    // Votes must persist since quotes/reposts may still reference the poll.
+    // if (post.poll) {
+    //   pollVotesMap.delete(postId);
+    // }
+
     feedEngine.invalidateCache(CURRENT_USER_ID);
+    eventEmitter.emit('postDeleted', postId);
 
     console.log(`[Post] Deleted post ${postId}`);
     return true;
@@ -2123,25 +2152,26 @@ export const api = {
     }
     reactionRateLimiter.recordAction();
 
-    const post = allPosts.find(p => p.id === postId);
+    const canonicalId = getCanonicalId(postId);
+    const post = allPosts.find(p => p.id === canonicalId);
     if (!post) {
       throw new Error('Post not found');
     }
 
-    if (!reactionsMap.has(postId)) {
-      reactionsMap.set(postId, new Map());
+    if (!reactionsMap.has(canonicalId)) {
+      reactionsMap.set(canonicalId, new Map());
     }
-    const postReactions = reactionsMap.get(postId)!;
+    const postReactions = reactionsMap.get(canonicalId)!;
 
     const prevReaction = postReactions.get(CURRENT_USER_ID) || 'NONE';
     const finalAction = prevReaction === action ? 'NONE' : action;
 
     if (finalAction === 'NONE') {
       postReactions.delete(CURRENT_USER_ID);
-      console.log(`[Reaction] User ${CURRENT_USER_ID} removed reaction from ${postId}`);
+      console.log(`[Reaction] User ${CURRENT_USER_ID} removed reaction from ${canonicalId}`);
     } else {
       postReactions.set(CURRENT_USER_ID, finalAction);
-      console.log(`[Reaction] User ${CURRENT_USER_ID} reacted ${finalAction} to ${postId}`);
+      console.log(`[Reaction] User ${CURRENT_USER_ID} reacted ${finalAction} to ${canonicalId}`);
     }
 
     // Notify post author
@@ -2168,15 +2198,16 @@ export const api = {
     }
     reactionRateLimiter.recordAction();
 
-    const post = allPosts.find(p => p.id === postId);
+    const canonicalId = getCanonicalId(postId);
+    const post = allPosts.find(p => p.id === canonicalId);
     if (!post) {
       throw new Error('Post not found');
     }
 
-    if (!repostsMap.has(postId)) {
-      repostsMap.set(postId, new Set());
+    if (!repostsMap.has(canonicalId)) {
+      repostsMap.set(canonicalId, new Set());
     }
-    const postReposts = repostsMap.get(postId)!;
+    const postReposts = repostsMap.get(canonicalId)!;
 
     if (postReposts.has(CURRENT_USER_ID)) {
       // Un-repost
@@ -2185,20 +2216,20 @@ export const api = {
       // Remove virtual repost entry
       const idx = allPosts.findIndex(p =>
         p.repostedBy?.id === CURRENT_USER_ID &&
-        p.id.startsWith(`repost-${postId}`)
+        p.id.startsWith(`repost:${canonicalId}:`)
       );
       if (idx !== -1) {
         allPosts.splice(idx, 1);
       }
 
-      console.log(`[Repost] User ${CURRENT_USER_ID} removed repost of ${postId}`);
+      console.log(`[Repost] User ${CURRENT_USER_ID} removed repost of ${canonicalId}`);
     } else {
       // Repost
       postReposts.add(CURRENT_USER_ID);
 
       const repostEntry: Post = {
         ...post,
-        id: `repost-${post.id}-${Date.now()}`,
+        id: `repost:${post.id}:${Date.now()}`,
         repostedBy: userMap.get(CURRENT_USER_ID)!,
         createdAt: new Date().toISOString()
       };
@@ -2215,7 +2246,7 @@ export const api = {
         });
       }
 
-      console.log(`[Repost] User ${CURRENT_USER_ID} reposted ${postId}`);
+      console.log(`[Repost] User ${CURRENT_USER_ID} reposted ${canonicalId}`);
     }
 
     feedEngine.invalidateCache(CURRENT_USER_ID);
@@ -2227,7 +2258,8 @@ export const api = {
    * @returns True if bookmarked, false if unbookmarked
    */
   toggleBookmark: async (postId: string): Promise<boolean> => {
-    const post = allPosts.find(p => p.id === postId);
+    const canonicalId = getCanonicalId(postId);
+    const post = allPosts.find(p => p.id === canonicalId);
     if (!post) {
       throw new Error('Post not found');
     }
@@ -2238,13 +2270,13 @@ export const api = {
 
     const bookmarks = bookmarksMap.get(CURRENT_USER_ID)!;
 
-    if (bookmarks.has(postId)) {
-      bookmarks.delete(postId);
-      console.log(`[Bookmark] Removed bookmark for ${postId}`);
+    if (bookmarks.has(canonicalId)) {
+      bookmarks.delete(canonicalId);
+      console.log(`[Bookmark] Removed bookmark for ${canonicalId}`);
       return false;
     } else {
-      bookmarks.add(postId);
-      console.log(`[Bookmark] Added bookmark for ${postId}`);
+      bookmarks.add(canonicalId);
+      console.log(`[Bookmark] Added bookmark for ${canonicalId}`);
       return true;
     }
   },
@@ -2255,7 +2287,8 @@ export const api = {
    * @returns True if bookmarked
    */
   isBookmarked: async (postId: string): Promise<boolean> => {
-    return bookmarksMap.get(CURRENT_USER_ID)?.has(postId) || false;
+    const canonicalId = getCanonicalId(postId);
+    return bookmarksMap.get(CURRENT_USER_ID)?.has(canonicalId) || false;
   },
 
   /**

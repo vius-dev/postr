@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import ReportModal from './modals/ReportModal';
 import { ReportType } from '@/types/reports';
 import { useTheme } from '@/theme/theme';
+import { useAuthStore } from '@/state/auth';
 
 interface PostMenuProps {
   visible: boolean;
@@ -15,6 +16,7 @@ interface PostMenuProps {
 
 export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
   const { theme } = useTheme();
+  const { user } = useAuthStore();
   const [isReportModalVisible, setReportModalVisible] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -130,6 +132,30 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     }
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deletePost(post.id);
+              onClose();
+            } catch (error) {
+              Alert.alert('Error', 'Could not delete post.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const isAuthor = user?.id === post.author.id;
+
   return (
     <>
       <Modal
@@ -195,6 +221,16 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
               <Ionicons name="flag-outline" size={22} color={theme.error} />
               <Text style={[styles.optionText, { color: theme.error }]}>Report Post</Text>
             </TouchableOpacity>
+
+            {isAuthor && (
+              <>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <TouchableOpacity style={styles.option} onPress={handleDelete}>
+                  <Ionicons name="trash-outline" size={22} color={theme.error} />
+                  <Text style={[styles.optionText, { color: theme.error }]}>Delete Post</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </Pressable>
       </Modal>

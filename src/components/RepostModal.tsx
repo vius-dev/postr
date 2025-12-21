@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity } from 'react-native';
-import { useTheme } from '../theme/theme';
+import { useTheme } from '@/theme/theme';
 
 interface RepostModalProps {
   visible: boolean;
@@ -25,16 +25,20 @@ export default function RepostModal({
       visible={visible}
       onRequestClose={onClose}
     >
-      <TouchableOpacity style={styles.overlay} onPress={onClose}>
+      <TouchableOpacity
+        style={[styles.overlay, { backgroundColor: theme.overlay }]}
+        onPress={onClose}
+        activeOpacity={1}
+      >
         <View style={[styles.container, { backgroundColor: theme.background }]}>
           <TouchableOpacity
             style={[styles.option, { borderBottomColor: theme.border }]}
             onPress={onRepost}
           >
-            <Text style={[styles.optionText, { color: theme.text }]}>Repost</Text>
+            <Text style={[styles.optionText, { color: theme.textPrimary }]}>Repost</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.option} onPress={onQuote}>
-            <Text style={[styles.optionText, { color: theme.text }]}>Quote</Text>
+            <Text style={[styles.optionText, { color: theme.textPrimary }]}>Quote</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -46,7 +50,6 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   container: {
     borderTopLeftRadius: 15,

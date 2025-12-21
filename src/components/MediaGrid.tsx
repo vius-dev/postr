@@ -3,6 +3,8 @@ import React from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Media } from '@/types/post';
+import { useTheme } from '@/theme/theme';
+
 
 interface MediaGridProps {
     media: Media[];
@@ -11,7 +13,9 @@ interface MediaGridProps {
 }
 
 const MediaGrid = ({ media, onRemove, onPress }: MediaGridProps) => {
+    const { theme } = useTheme();
     if (!media || media.length === 0) return null;
+
 
     const renderMediaItem = (item: Media, index: number, containerStyle: any) => (
         <View style={containerStyle} key={item.url}>
@@ -25,9 +29,10 @@ const MediaGrid = ({ media, onRemove, onPress }: MediaGridProps) => {
             </TouchableOpacity>
             {onRemove && (
                 <TouchableOpacity onPress={() => onRemove(item.url)} style={styles.removeMediaButton}>
-                    <Ionicons name="close" size={18} color="white" />
+                    <Ionicons name="close" size={18} color={theme.textInverse} />
                 </TouchableOpacity>
             )}
+
         </View>
     );
 
@@ -43,30 +48,31 @@ const MediaGrid = ({ media, onRemove, onPress }: MediaGridProps) => {
 
     if (media.length === 2) {
         return (
-            <View style={containerStyle}>
-                {renderMediaItem(media[0], 0, styles.gridImage2)}
-                {renderMediaItem(media[1], 1, styles.gridImage2)}
+            <View style={[containerStyle, { backgroundColor: theme.background }]}>
+                {renderMediaItem(media[0], 0, [styles.gridImage2, { borderColor: theme.background }])}
+                {renderMediaItem(media[1], 1, [styles.gridImage2, { borderColor: theme.background }])}
             </View>
         );
     }
 
     if (media.length === 3) {
         return (
-            <View style={containerStyle}>
-                {renderMediaItem(media[0], 0, styles.gridImage3Left)}
+            <View style={[containerStyle, { backgroundColor: theme.background }]}>
+                {renderMediaItem(media[0], 0, [styles.gridImage3Left, { borderColor: theme.background }])}
                 <View style={styles.gridImage3RightContainer}>
-                    {renderMediaItem(media[1], 1, styles.gridImage3Right)}
-                    {renderMediaItem(media[2], 2, styles.gridImage3Right)}
+                    {renderMediaItem(media[1], 1, [styles.gridImage3Right, { borderColor: theme.background }])}
+                    {renderMediaItem(media[2], 2, [styles.gridImage3Right, { borderColor: theme.background }])}
                 </View>
             </View>
         );
     }
 
     return (
-        <View style={[containerStyle, { flexWrap: 'wrap' }]}>
-            {media.map((item, index) => renderMediaItem(item, index, styles.gridImage4))}
+        <View style={[containerStyle, { flexWrap: 'wrap', backgroundColor: theme.background }]}>
+            {media.map((item, index) => renderMediaItem(item, index, [styles.gridImage4, { borderColor: theme.background }]))}
         </View>
     );
+
 };
 
 const styles = StyleSheet.create({
@@ -76,8 +82,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         flexDirection: 'row',
         marginVertical: 8,
-        backgroundColor: '#000',
     },
+
     singleImageContainer: {
         height: 200,
     },
@@ -101,13 +107,11 @@ const styles = StyleSheet.create({
         width: '50%',
         height: '100%',
         borderRightWidth: 1,
-        borderColor: '#000',
     },
     gridImage3Left: {
         width: '66.66%',
         height: '100%',
         borderRightWidth: 1,
-        borderColor: '#000',
     },
     gridImage3RightContainer: {
         width: '33.34%',
@@ -117,15 +121,14 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '50%',
         borderBottomWidth: 1,
-        borderColor: '#000',
     },
     gridImage4: {
         width: '50%',
         height: '50%',
         borderRightWidth: 1,
         borderBottomWidth: 1,
-        borderColor: '#000',
     },
+
     removeMediaButton: {
         position: 'absolute',
         top: 5,

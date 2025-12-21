@@ -150,7 +150,7 @@ export default function MessagesScreen() {
             >
               <Text style={[
                 styles.filterText,
-                { color: activeFilter === filter ? 'white' : theme.textSecondary }
+                { color: activeFilter === filter ? theme.textInverse : theme.textSecondary }
               ]}>
                 {filter}
               </Text>
@@ -198,7 +198,7 @@ export default function MessagesScreen() {
             </Text>
             {!searchQuery && (
               <TouchableOpacity style={[styles.writeButton, { backgroundColor: theme.primary }]} onPress={() => router.push('/(modals)/new-message')}>
-                <Text style={styles.writeButtonText}>Write a message</Text>
+                <Text style={[styles.writeButtonText, { color: theme.textInverse }]}>Write a message</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -206,8 +206,17 @@ export default function MessagesScreen() {
       />
 
       {/* Compose FAB */}
-      <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary }]} onPress={() => router.push('/(modals)/new-message')}>
-        <Ionicons name="mail-outline" size={24} color="white" />
+      <TouchableOpacity
+        style={[
+          styles.fab,
+          {
+            backgroundColor: theme.primary,
+            shadowColor: theme.textPrimary
+          }
+        ]}
+        onPress={() => router.push('/(modals)/new-message')}
+      >
+        <Ionicons name="mail-outline" size={24} color={theme.textInverse} />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -295,7 +304,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   writeButtonText: {
-    color: 'white',
     fontWeight: 'bold',
     fontSize: 15,
   },
@@ -309,7 +317,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '@/lib/api';
 import PostCard from '@/components/PostCard';
 import CommentCard from '@/components/CommentCard';
@@ -19,6 +19,7 @@ type ListItem = (Post & { itemType: 'focal' | 'parent' }) | (CommentWithDepth & 
 
 const PostDetailScreen = () => {
   const { id } = useLocalSearchParams();
+  const router = useRouter();
   const { theme } = useTheme();
   const [listData, setListData] = useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,9 +77,23 @@ const PostDetailScreen = () => {
       }
     };
 
+    const handlePostDeleted = (deletedPostId: string) => {
+      if (deletedPostId === id) {
+        // router.back() might be called multiple times if we're not careful, 
+        // but here it's fine since the component will unmount.
+        router.back();
+      } else {
+        setListData(prev => prev.filter(item => item.id !== deletedPostId));
+      }
+    };
+
     eventEmitter.on('newComment', handleNewComment);
-    return () => eventEmitter.off('newComment', handleNewComment);
-  }, [id, listData.length]); // listData.length to ensure we have the current state in the listener closure
+    eventEmitter.on('postDeleted', handlePostDeleted);
+    return () => {
+      eventEmitter.off('newComment', handleNewComment);
+      eventEmitter.off('postDeleted', handlePostDeleted);
+    };
+  }, [id, listData.length, router]); // listData.length to ensure we have the current state in the listener closure
 
   const renderItem = ({ item }: { item: ListItem }) => {
     switch (item.itemType) {

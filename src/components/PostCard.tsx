@@ -166,10 +166,6 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
                     <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{currentCounts.reposts}</Text>
                     <Text style={[styles.statLabel, { color: theme.textTertiary }]}> Reposts</Text>
                   </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{currentCounts.comments}</Text>
-                    <Text style={[styles.statLabel, { color: theme.textTertiary }]}> Comments</Text>
-                  </View>
                 </View>
               </View>
             ) : null}

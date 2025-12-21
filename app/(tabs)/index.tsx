@@ -7,6 +7,7 @@ import FAB from '@/components/FAB';
 import { Post } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import HomeHeader from '@/components/HomeHeader';
+import { eventEmitter } from '@/lib/EventEmitter';
 
 export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -31,6 +32,13 @@ export default function FeedScreen() {
 
   useEffect(() => {
     fetchPosts(true); // Initial fetch
+
+    const handlePostDeleted = (deletedPostId: string) => {
+      setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
+    };
+
+    eventEmitter.on('postDeleted', handlePostDeleted);
+    return () => eventEmitter.off('postDeleted', handlePostDeleted);
   }, []);
 
   const handleRefresh = () => {

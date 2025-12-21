@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
@@ -14,10 +13,13 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import MediaGrid from '@/components/MediaGrid';
 
 const MAX_CHARACTERS = 280;
 
@@ -54,7 +56,7 @@ const ReplyComposerScreen = () => {
   const handlePickImage = async () => {
     if (media.length >= 4) return;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
       selectionLimit: 4 - media.length,
       quality: 1,
@@ -71,47 +73,17 @@ const ReplyComposerScreen = () => {
 
   const MediaPreview = () => {
     if (media.length === 0) return null;
-
-    const renderMediaItem = (item: ImagePicker.ImagePickerAsset, containerStyle: object) => (
-      <View style={containerStyle}>
-        <Image source={{ uri: item.uri }} style={styles.mediaPreviewImage} />
-        <TouchableOpacity onPress={() => removeMedia(item.uri)} style={styles.removeMediaButton}>
-          <Ionicons name="close" size={18} color="white" />
-        </TouchableOpacity>
-      </View>
-    );
-
-    if (media.length === 1) {
-      return <View style={styles.mediaGridContainer}>{renderMediaItem(media[0], styles.gridImage1)}</View>;
-    }
-    if (media.length === 2) {
-      return (
-        <View style={styles.mediaGridContainer}>
-          {renderMediaItem(media[0], styles.gridImage2)}
-          {renderMediaItem(media[1], styles.gridImage2)}
-        </View>
-      );
-    }
-    if (media.length === 3) {
-      return (
-        <View style={styles.mediaGridContainer}>
-          {renderMediaItem(media[0], styles.gridImage3Left)}
-          <View style={styles.gridImage3RightContainer}>
-            {renderMediaItem(media[1], styles.gridImage3Right)}
-            {renderMediaItem(media[2], styles.gridImage3Right)}
-          </View>
-        </View>
-      );
-    }
     return (
-      <View style={[styles.mediaGridContainer, { flexWrap: 'wrap' }]}>
-        {media.map((item) => renderMediaItem(item, styles.gridImage4))}
-      </View>
+      <MediaGrid
+        media={media.map((m) => ({ type: 'image', url: m.uri }))}
+        onRemove={removeMedia}
+      />
     );
   };
 
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable onPress={handleCancel}>
           <Text style={[styles.headerButton, { color: theme.link }]}>Cancel</Text>
@@ -224,54 +196,6 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: 14,
   },
-  mediaGridContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    marginBottom: 10,
-    backgroundColor: '#fff',
-  },
-  gridImage1: {
-    width: '100%',
-    height: '100%',
-  },
-  gridImage2: {
-    width: '50%',
-    height: '100%',
-    borderRightWidth: 2,
-    borderColor: '#fff',
-  },
-  gridImage3Left: {
-    width: '66.66%',
-    height: '100%',
-    borderRightWidth: 2,
-    borderColor: '#fff',
-  },
-  gridImage3RightContainer: {
-    width: '33.34%',
-    height: '100%',
-  },
-  gridImage3Right: {
-    width: '100%',
-    height: '50%',
-    borderBottomWidth: 2,
-    borderColor: '#fff',
-  },
-  gridImage4: {
-    width: '50%',
-    height: '50%',
-    borderRightWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: '#fff',
-  },
-  mediaPreviewImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-    position: 'absolute',
-  },
   removeMediaButton: {
     position: 'absolute',
     top: 5,
@@ -284,5 +208,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+
 
 export default ReplyComposerScreen;

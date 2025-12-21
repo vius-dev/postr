@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { Post } from '@/types/post';
 import PostCard from '@/components/PostCard';
 import { useTheme } from '@/theme/theme';
+import { eventEmitter } from '@/lib/EventEmitter';
 
 interface ForYouFeedProps {
   header?: React.ReactElement;
@@ -18,6 +19,13 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
 
   useEffect(() => {
     loadInitialPosts();
+
+    const handlePostDeleted = (deletedPostId: string) => {
+      setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
+    };
+
+    eventEmitter.on('postDeleted', handlePostDeleted);
+    return () => eventEmitter.off('postDeleted', handlePostDeleted);
   }, []);
 
   const loadInitialPosts = async () => {

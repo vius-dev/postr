@@ -52,7 +52,10 @@ export default function ReportModal({ visible, onClose, onSubmit }: ReportModalP
       visible={visible}
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
+      <Pressable
+        style={[styles.overlay, { backgroundColor: theme.overlay }]}
+        onPress={handleClose}
+      >
         <View style={[styles.container, { backgroundColor: theme.background }]}>
           <View style={[styles.dragHandle, { backgroundColor: theme.border }]} />
 
@@ -131,7 +134,6 @@ export default function ReportModal({ visible, onClose, onSubmit }: ReportModalP
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'flex-end',
   },
   container: {

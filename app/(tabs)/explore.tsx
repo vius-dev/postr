@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
 import ForYouFeed from '@/components/ForYouFeed';
 import { useExploreSettings } from '@/state/exploreSettings';
+import { eventEmitter } from '@/lib/EventEmitter';
 
 export default function ExploreScreen() {
   const { theme } = useTheme();
@@ -36,6 +37,16 @@ export default function ExploreScreen() {
       }
     };
     fetchTrends();
+
+    const handlePostDeleted = (deletedPostId: string) => {
+      setSearchResults(prev => ({
+        ...prev,
+        posts: prev.posts.filter(p => p.id !== deletedPostId)
+      }));
+    };
+
+    eventEmitter.on('postDeleted', handlePostDeleted);
+    return () => eventEmitter.off('postDeleted', handlePostDeleted);
   }, [personalizeTrends]);
 
   const handleSearch = async (query: string) => {
@@ -115,7 +126,7 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Search Header */}
-      <View style={styles.searchHeader}>
+      <View style={[styles.searchHeader, { borderBottomColor: theme.border }]}>
         <ExploreSearchBar
           value={searchQuery}
           onChangeText={handleSearch}
@@ -171,7 +182,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd', // Added a light border
   },
   settingsIcon: {
     marginLeft: 15,
@@ -182,7 +192,6 @@ const styles = StyleSheet.create({
   section: {
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
   },
   sectionTitle: {
     fontSize: 20,
@@ -250,7 +259,6 @@ const styles = StyleSheet.create({
   },
   userHandle: {
     fontSize: 15,
-    color: 'gray',
   },
   emptyContainer: {
     flex: 1,

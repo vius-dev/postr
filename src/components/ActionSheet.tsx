@@ -74,7 +74,7 @@ export default function ActionSheet({
                 <Text
                   style={[
                     styles.cancelOptionText,
-                    { color: theme.secondary },
+                    { color: theme.textSecondary },
                   ]}
                 >
                   Cancel
