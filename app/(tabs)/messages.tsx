@@ -10,6 +10,7 @@ import ExploreSearchBar from '@/components/ExploreSearchBar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CURRENT_USER_ID } from '@/lib/api';
+import { useResponsive } from '@/hooks/useResponsive';
 
 
 type FilterType = 'All' | 'DMs' | 'Groups' | 'Channels' | 'Unread';
@@ -18,6 +19,7 @@ import { useMessagesSettings, useNotificationsSettings } from '@/state/communica
 
 export default function MessagesScreen() {
   const { theme } = useTheme();
+  const { showSidebar } = useResponsive();
   const router = useRouter();
   const { allowMessageRequests } = useMessagesSettings();
   const { mutedWords } = useNotificationsSettings();
@@ -206,18 +208,20 @@ export default function MessagesScreen() {
       />
 
       {/* Compose FAB */}
-      <TouchableOpacity
-        style={[
-          styles.fab,
-          {
-            backgroundColor: theme.primary,
-            shadowColor: theme.textPrimary
-          }
-        ]}
-        onPress={() => router.push('/(modals)/new-message')}
-      >
-        <Ionicons name="mail-outline" size={24} color={theme.textInverse} />
-      </TouchableOpacity>
+      {!showSidebar && (
+        <TouchableOpacity
+          style={[
+            styles.fab,
+            {
+              backgroundColor: theme.primary,
+              shadowColor: theme.textPrimary
+            }
+          ]}
+          onPress={() => router.push('/(modals)/new-message')}
+        >
+          <Ionicons name="mail-outline" size={24} color={theme.textInverse} />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }

@@ -1,11 +1,10 @@
 /**
- * Overhauled Color System
- * Teal-first, no blues, inverted contrast philosophy
- * Primary: #2cc9b3
+ * Vius Color System
+ * Primary: #2CC9B3
  */
 
 /* -----------------------------------------------------
- * Core Brand Palette (No Blues)
+ * Vius Color System
  * --------------------------------------------------- */
 
 export const brandColors = {
@@ -15,14 +14,14 @@ export const brandColors = {
     200: '#9BE6DB',
     300: '#6EDACA',
     400: '#45D0BC',
-    500: '#2CC9B3', // PRIMARY
+    500: '#2CC9B3', // VIUS PRIMARY
     600: '#25B3A0',
     700: '#1F9C8C',
     800: '#1A8578',
     900: '#146B61',
   },
 
-  /* Neutral tones (teal-tinted, not Twitter gray) */
+  /* Neutral tones (teal-tinted gray) */
   neutral: {
     50: '#F6F9F8',
     100: '#EEF2F1',
@@ -208,7 +207,7 @@ export const colors = {
 
 
 /* -----------------------------------------------------
- * Types & Helpers (unchanged API)
+ * Types & Helpers (unchanged API) 
  * --------------------------------------------------- */
 
 export type ThemeMode = 'light' | 'dark';

@@ -4,6 +4,7 @@ import { TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { useResponsive } from '@/hooks/useResponsive';
 import ActionSheet from './ActionSheet';
 
 type ActionSheetOption = {
@@ -13,6 +14,7 @@ type ActionSheetOption = {
 
 export default function FAB() {
   const { theme } = useTheme();
+  const { showSidebar } = useResponsive();
   const router = useRouter();
   const [sheetVisible, setSheetVisible] = useState(false);
   const [selectedAction, setSelectedAction] = useState<ActionSheetOption | null>(
@@ -47,6 +49,8 @@ export default function FAB() {
     setSelectedAction(option);
     setSheetVisible(false);
   };
+
+  if (showSidebar) return null;
 
   return (
     <>
