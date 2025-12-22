@@ -1,4 +1,4 @@
-import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -36,12 +36,12 @@ export default function RegisterScreen() {
         style={[styles.container, { backgroundColor: theme.background }]}
       >
         <View style={styles.header}>
-          <Ionicons name="logo-twitter" size={32} color={theme.primary} />
+          <Image source={require('../../assets/images/logo.png')} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
         </View>
 
         <View style={styles.content}>
           <Text style={[styles.title, { color: theme.textPrimary }]}>
-            Create your account
+            Join Vius Now
           </Text>
 
           <View style={styles.form}>
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '800',
     marginBottom: 40,
-    textAlign: 'left',
+    textAlign: 'center',
   },
   form: {
     width: '100%',

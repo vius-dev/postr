@@ -41,8 +41,8 @@ export const WebWidgets = () => {
                     <View style={styles.mockUser}>
                         <View style={[styles.avatar, { backgroundColor: theme.border }]} />
                         <View style={styles.mockUserInfo}>
-                            <Text style={[styles.userName, { color: theme.textPrimary }]}>React Native</Text>
-                            <Text style={[styles.userHandle, { color: theme.textTertiary }]}>@reactnative</Text>
+                            <Text style={[styles.userName, { color: theme.textPrimary }]} numberOfLines={1}>React Native</Text>
+                            <Text style={[styles.userHandle, { color: theme.textTertiary }]} numberOfLines={1}>@reactnative</Text>
                         </View>
                         <View style={[styles.followButton, { backgroundColor: theme.textPrimary }]}>
                             <Text style={[styles.followButtonText, { color: theme.background }]}>Follow</Text>
@@ -66,9 +66,14 @@ export const WebWidgets = () => {
 
 const styles = StyleSheet.create({
     container: {
-        height: '100%',
-        paddingLeft: 20,
+        height: '92%',
+        paddingHorizontal: 20,
         width: 350,
+        marginTop: 10,
+        borderRadius: 30,
+        paddingTop: 20,
+        // Mock Glass effect
+        backgroundColor: 'rgba(255,255,255,0.0)', // Transparent container, widgets float inside
     },
     searchWrapper: {
         paddingVertical: 10,
@@ -89,8 +94,14 @@ const styles = StyleSheet.create({
         fontSize: 15,
     },
     widgetCard: {
-        borderRadius: 16,
+        borderRadius: 24,
         overflow: 'hidden',
+        marginBottom: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 4,
     },
     widgetTitle: {
         fontSize: 20,
@@ -120,6 +131,7 @@ const styles = StyleSheet.create({
     userName: {
         fontWeight: 'bold',
         fontSize: 15,
+        // Ensure truncation works
     },
     userHandle: {
         fontSize: 14,

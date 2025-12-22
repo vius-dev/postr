@@ -22,11 +22,13 @@ export default function ExploreScreen() {
   const [searchResults, setSearchResults] = useState<{ posts: Post[], users: User[] }>({ posts: [], users: [] });
   const [isSearching, setIsSearching] = useState(false);
   const [trends, setTrends] = useState<{ hashtag: string, count: number }[]>([]);
+  const [visibleTrendsCount, setVisibleTrendsCount] = useState(5);
 
   React.useEffect(() => {
     const fetchTrends = async () => {
       // In a real app, we'd pass these settings to the API
-      const trendingData = await api.getTrends();
+      // Fetch more trends initially to allow expanding
+      const trendingData = await api.getTrends(20);
 
       // For personalizing, we might shuffle or filter if this was a real backend
       // Here we just simulate it by slightly changing the order or count
@@ -48,6 +50,10 @@ export default function ExploreScreen() {
     eventEmitter.on('postDeleted', handlePostDeleted);
     return () => eventEmitter.off('postDeleted', handlePostDeleted);
   }, [personalizeTrends]);
+
+  const handleShowMore = () => {
+    setVisibleTrendsCount(prev => prev + 5);
+  };
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -103,9 +109,9 @@ export default function ExploreScreen() {
                 onPress={() => router.push(`/(profile)/${user.username}`)}
               >
                 <Image source={{ uri: user.avatar }} style={styles.avatar} />
-                <View>
-                  <Text style={[styles.userName, { color: theme.textPrimary }]}>{user.name}</Text>
-                  <Text style={[styles.userHandle, { color: theme.textTertiary }]}>@{user.username}</Text>
+                <View style={{ flex: 1, justifyContent: 'center' }}>
+                  <Text style={[styles.userName, { color: theme.textPrimary }]} numberOfLines={1}>{user.name}</Text>
+                  <Text style={[styles.userHandle, { color: theme.textTertiary }]} numberOfLines={1}>@{user.username}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -130,7 +136,7 @@ export default function ExploreScreen() {
         <ExploreSearchBar
           value={searchQuery}
           onChangeText={handleSearch}
-          placeholder="Search Twitter"
+          placeholder="Search Vius"
           containerStyle={{ flex: 1 }}
         />
         <TouchableOpacity
@@ -151,14 +157,16 @@ export default function ExploreScreen() {
                 <Text style={[styles.trendsTitle, { color: theme.textPrimary }]}>
                   {personalizeTrends ? 'Trends for you' : `Trending in ${showLocationContent ? 'Your Location' : explorationLocation}`}
                 </Text>
-                {trends.map((item, index) => (
+                {trends.slice(0, visibleTrendsCount).map((item, index) => (
                   <View key={item.hashtag}>
                     {renderTrendItem({ item, index })}
                   </View>
                 ))}
-                <TouchableOpacity style={styles.showMoreTrends}>
-                  <Text style={{ color: theme.primary, fontSize: 15 }}>Show more</Text>
-                </TouchableOpacity>
+                {visibleTrendsCount < trends.length && (
+                  <TouchableOpacity style={styles.showMoreTrends} onPress={handleShowMore}>
+                    <Text style={{ color: theme.primary, fontSize: 15 }}>Show more</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               <View style={[styles.divider, { backgroundColor: theme.surface }]} />
               <View style={styles.feedSection}>

@@ -17,13 +17,21 @@ export const SidebarItem = ({ label, icon, href, compact }: SidebarItemProps) =>
     const router = useRouter();
     const pathname = usePathname();
 
-    // Check if current path matches href (Twitter pre-2023 style)
+    // Check if current path matches href 
     const isActive = pathname === href || (href !== '/' && pathname.startsWith(href));
 
     return (
         <TouchableOpacity
             style={[
                 styles.container,
+                isActive && {
+                    backgroundColor: theme.surfaceHover,
+                    shadowColor: theme.primary,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 10,
+                    elevation: 5
+                },
                 compact && styles.compactContainer
             ]}
             onPress={() => router.push(href as any)}
@@ -40,7 +48,7 @@ export const SidebarItem = ({ label, icon, href, compact }: SidebarItemProps) =>
                         style={[
                             styles.label,
                             { color: isActive ? theme.primary : theme.textPrimary },
-                            isActive && styles.activeLabel
+                            isActive && { color: theme.primary, fontWeight: '800' }
                         ]}
                     >
                         {label}
@@ -54,10 +62,11 @@ export const SidebarItem = ({ label, icon, href, compact }: SidebarItemProps) =>
 const styles = StyleSheet.create({
     container: {
         paddingVertical: 12,
-        paddingHorizontal: 12,
-        borderRadius: 30,
+        paddingHorizontal: 20,
+        borderRadius: 15, // Softer rounding
         marginVertical: 4,
-        alignSelf: 'flex-start',
+        alignSelf: 'center',
+        width: '90%', // Fill the dock mostly
     },
     compactContainer: {
         alignSelf: 'center',
@@ -71,8 +80,5 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 19,
         marginRight: 10,
-    },
-    activeLabel: {
-        fontWeight: 'bold',
     },
 });

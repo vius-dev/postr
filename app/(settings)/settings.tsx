@@ -88,13 +88,13 @@ const SettingsScreen = () => {
                         icon="person-outline"
                         title="Your account"
                         subtitle="See information about your account, download an archive of your data, or learn about your account deactivation options"
-                        onPress={() => { }}
+                        onPress={() => router.push('/(settings)/account')}
                     />
                     <SettingsItem
                         icon="key-outline"
                         title="Change your password"
                         subtitle="Change your password at any time"
-                        onPress={() => { }}
+                        onPress={() => router.push('/(settings)/password')}
                     />
                 </View>
 
@@ -104,19 +104,19 @@ const SettingsScreen = () => {
                         icon="shield-checkmark-outline"
                         title="Security and account access"
                         subtitle="Manage your account's security and keep track of your account's usage"
-                        onPress={() => { }}
+                        onPress={() => router.push('/(settings)/privacy')}
                     />
                     <SettingsItem
                         icon="eye-off-outline"
                         title="Privacy and safety"
                         subtitle="Manage what information you see and share on Postr"
-                        onPress={() => { }}
+                        onPress={() => router.push('/(settings)/privacy')}
                     />
                     <SettingsItem
                         icon="notifications-outline"
                         title="Notifications"
                         subtitle="Select the kinds of notifications you get about your activities, interests, and recommendations"
-                        onPress={() => { }}
+                        onPress={() => router.push('/(settings)/notifications')}
                     />
                 </View>
 
@@ -126,7 +126,7 @@ const SettingsScreen = () => {
                         icon="color-palette-outline"
                         title="Accessibility, display and languages"
                         subtitle="Manage how Postr content is displayed to you"
-                        onPress={() => { }}
+                        onPress={() => router.push('/(settings)/display')}
                     />
                 </View>
 

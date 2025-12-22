@@ -19,7 +19,7 @@ export const ResponsiveLayout = ({ children }: ResponsiveLayoutProps) => {
     }
 
     return (
-        <View style={[styles.mainWrapper, { backgroundColor: theme.background }]}>
+        <View style={[styles.mainWrapper, { backgroundColor: theme.backgroundSecondary }]}>
             <View style={styles.centerContainer}>
                 {/* Left Sidebar */}
                 {showSidebar && (
@@ -34,7 +34,7 @@ export const ResponsiveLayout = ({ children }: ResponsiveLayoutProps) => {
                 {/* Main Content Area */}
                 <View style={[
                     styles.contentArea,
-                    { borderLeftColor: theme.border, borderRightColor: theme.border }
+                    { backgroundColor: theme.background, borderRadius: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 }
                 ]}>
                     {children}
                 </View>
@@ -55,30 +55,36 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         justifyContent: 'center',
+        paddingTop: 10, // Top spacing for floating feel
     },
     centerContainer: {
         flexDirection: 'row',
         width: '100%',
-        maxWidth: 1250, // Max width for the whole 3-column app
+        maxWidth: 1300,
+        gap: 25, // Increased gap for separation
+        paddingHorizontal: 20,
     },
     sidebarContainer: {
         flex: 1,
         minWidth: 250,
         maxWidth: 275,
+        alignItems: 'flex-end',
+        paddingTop: 10,
     },
     sidebarTablet: {
         minWidth: 80,
         maxWidth: 80,
+        alignItems: 'center',
     },
     contentArea: {
         flex: 2,
         minWidth: 600,
-        maxWidth: 600,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
+        maxWidth: 650,
+        overflow: 'hidden', // Ensure radius clips content
     },
     widgetsContainer: {
         flex: 1.5,
         minWidth: 350,
+        paddingTop: 10,
     },
 });

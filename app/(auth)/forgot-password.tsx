@@ -1,8 +1,8 @@
-import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
+//import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ export default function ForgotPasswordScreen() {
 
   const handlePasswordReset = async () => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://your-app-url/reset-password',
+      redirectTo: 'https://vius.app/reset-password',
     });
     if (error) {
       Alert.alert('Error', error.message);
@@ -30,12 +30,12 @@ export default function ForgotPasswordScreen() {
         style={[styles.container, { backgroundColor: theme.background }]}
       >
         <View style={styles.header}>
-          <Ionicons name="logo-twitter" size={32} color={theme.primary} />
+          <Image source={require('../../assets/images/logo.png')} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
         </View>
 
         <View style={styles.content}>
           <Text style={[styles.title, { color: theme.textPrimary }]}>
-            Find your Twitter account
+            Find your Vius account
           </Text>
 
           <Text style={[styles.subtitle, { color: theme.textSecondary }]}>

@@ -1,4 +1,4 @@
-import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -33,12 +33,12 @@ export default function LoginScreen() {
         style={[styles.container, { backgroundColor: theme.background }]}
       >
         <View style={styles.header}>
-          <Ionicons name="logo-twitter" size={32} color={theme.primary} />
+          <Image source={require('../../assets/images/logo.png')} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
         </View>
 
         <View style={styles.content}>
           <Text style={[styles.title, { color: theme.textPrimary }]}>
-            See what's happening in the world right now.
+            See local vius right now and why they matter ...
           </Text>
 
           <View style={styles.form}>
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   title: {
-    fontSize: 30,
+    fontSize: 25,
     fontWeight: '800',
     marginBottom: 40,
     textAlign: 'left',

@@ -196,7 +196,7 @@ export default function MessagesScreen() {
               {searchQuery ? 'No results found' : 'No messages yet'}
             </Text>
             <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
-              {searchQuery ? 'Try searching for something else.' : 'Direct Messages are private conversations between you and other people on Twitter.'}
+              {searchQuery ? 'Try searching for something else.' : 'Direct Messages are private conversations between you and other people on Vius.'}
             </Text>
             {!searchQuery && (
               <TouchableOpacity style={[styles.writeButton, { backgroundColor: theme.primary }]} onPress={() => router.push('/(modals)/new-message')}>

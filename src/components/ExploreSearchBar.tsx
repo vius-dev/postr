@@ -19,7 +19,7 @@ interface ExploreSearchBarProps {
 export default function ExploreSearchBar({
     value,
     onChangeText,
-    placeholder = "Search Twitter",
+    placeholder = "Search Vius",
     containerStyle,
     autoFocus = false,
 }: ExploreSearchBarProps) {

@@ -1581,10 +1581,109 @@ const adminApi = {
 };
 
 // =============================================================================
+// SETTINGS SIMULATION
+// =============================================================================
+
+export interface PrivacySettings {
+  protectPosts: boolean;
+  photoTagging: boolean;
+  discoveryEmail: boolean;
+  discoveryPhone: boolean;
+  readReceipts: boolean;
+}
+
+export interface NotificationSettings {
+  qualityFilter: boolean;
+  pushMentions: boolean;
+  pushReplies: boolean;
+  pushLikes: boolean;
+  emailDigest: boolean;
+}
+
+// Mock database for settings
+const mockPrivacySettings = new Map<string, PrivacySettings>();
+const mockNotificationSettings = new Map<string, NotificationSettings>();
+
+// Initialize default settings for current user
+const defaultPrivacy: PrivacySettings = {
+  protectPosts: false,
+  photoTagging: true,
+  discoveryEmail: true,
+  discoveryPhone: false,
+  readReceipts: true
+};
+
+const defaultNotifications: NotificationSettings = {
+  qualityFilter: true,
+  pushMentions: true,
+  pushReplies: true,
+  pushLikes: false,
+  emailDigest: true
+};
+
+mockPrivacySettings.set('0', defaultPrivacy);
+mockNotificationSettings.set('0', defaultNotifications);
+
+// =============================================================================
 // MAIN API INTERFACE - PUBLIC METHODS
 // =============================================================================
 
 export const api = {
+  // ---------------------------------------------------------------------------
+  // SETTINGS & ACCOUNT MANAGEMENT
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Update account password (Mock)
+   */
+  updatePassword: async (current: string, newPass: string): Promise<void> => {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    if (current === 'wrong') throw new Error('Incorrect password');
+    console.log(`[API] Password updated for user ${CURRENT_USER_ID}`);
+  },
+
+  /**
+   * Get current privacy settings
+   */
+  getPrivacySettings: async (): Promise<PrivacySettings> => {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return mockPrivacySettings.get(CURRENT_USER_ID) || { ...defaultPrivacy };
+  },
+
+  /**
+   * Update privacy settings
+   */
+  updatePrivacySettings: async (settings: Partial<PrivacySettings>): Promise<PrivacySettings> => {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const current = mockPrivacySettings.get(CURRENT_USER_ID) || { ...defaultPrivacy };
+    const updated = { ...current, ...settings };
+    mockPrivacySettings.set(CURRENT_USER_ID, updated);
+    console.log(`[API] Privacy settings updated for ${CURRENT_USER_ID}`, updated);
+    return updated;
+  },
+
+  /**
+   * Get notification settings
+   */
+  getNotificationSettings: async (): Promise<NotificationSettings> => {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return mockNotificationSettings.get(CURRENT_USER_ID) || { ...defaultNotifications };
+  },
+
+  /**
+   * Update notification settings
+   */
+  updateNotificationSettings: async (settings: Partial<NotificationSettings>): Promise<NotificationSettings> => {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const current = mockNotificationSettings.get(CURRENT_USER_ID) || { ...defaultNotifications };
+    const updated = { ...current, ...settings };
+    mockNotificationSettings.set(CURRENT_USER_ID, updated);
+    console.log(`[API] Notification settings updated for ${CURRENT_USER_ID}`, updated);
+    return updated;
+  },
+
   // ---------------------------------------------------------------------------
   // POST CREATION & MANAGEMENT
   // ---------------------------------------------------------------------------

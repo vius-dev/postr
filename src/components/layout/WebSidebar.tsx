@@ -12,21 +12,29 @@ interface WebSidebarProps {
 }
 
 export const WebSidebar = ({ compact }: WebSidebarProps) => {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const { user } = useAuthStore();
     const router = useRouter();
 
     const username = user?.user_metadata?.username || 'devteam';
 
     return (
-        <View style={[styles.container, { borderRightColor: theme.border }]}>
+        <View style={[styles.container, {
+            // In a real app we'd use Expo BlurView, simulating "Glass" here with opacity locally or just clean card style
+            backgroundColor: isDarkMode ? 'rgba(30,30,30,0.85)' : 'rgba(255,255,255,0.85)',
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 12,
+            elevation: 5,
+        }]}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Logo */}
                 <TouchableOpacity
                     style={styles.logoContainer}
                     onPress={() => router.push('/')}
                 >
-                    <Ionicons name="logo-twitter" size={32} color={theme.primary} />
+                    <Image source={require('../../../assets/images/logo.png')} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
                 </TouchableOpacity>
 
                 {/* Global Nav */}
@@ -48,9 +56,9 @@ export const WebSidebar = ({ compact }: WebSidebarProps) => {
                     onPress={() => router.push('/(compose)/compose')}
                 >
                     {compact ? (
-                        <Ionicons name="add" size={24} color="#FFF" />
+                        <Ionicons name="add" size={24} color={theme.textInverse} />
                     ) : (
-                        <Text style={styles.postButtonText}>Post</Text>
+                        <Text style={[styles.postButtonText, { color: theme.textInverse }]}>Post</Text>
                     )}
                 </TouchableOpacity>
             </ScrollView>
@@ -80,13 +88,17 @@ export const WebSidebar = ({ compact }: WebSidebarProps) => {
 
 const styles = StyleSheet.create({
     container: {
-        height: '100%',
-        paddingHorizontal: 10,
+        height: '92%', // Floating height
+        width: '100%',
+        paddingHorizontal: 15, // More padding
         justifyContent: 'space-between',
-        paddingBottom: 20,
+        paddingBottom: 25,
+        borderRadius: 30, // Large radius for dock feel
+        marginTop: 10,
     },
     scrollContent: {
-        alignItems: 'flex-start',
+        alignItems: 'center', // Center in the floating dock
+        width: '100%',
     },
     logoContainer: {
         padding: 12,
@@ -110,7 +122,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     postButtonText: {
-        color: '#FFF',
         fontSize: 17,
         fontWeight: 'bold',
     },
@@ -137,6 +148,7 @@ const styles = StyleSheet.create({
     },
     userText: {
         flex: 1,
+        justifyContent: 'center',
     },
     userName: {
         fontWeight: 'bold',

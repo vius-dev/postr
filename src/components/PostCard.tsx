@@ -112,9 +112,9 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
           <Card.Header>
             <View style={styles.authorContainer}>
               <TouchableOpacity onPress={goToProfile} activeOpacity={0.7} style={styles.authorInfo}>
-                <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1}>{post.author.name}</Text>
+                <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{post.author.name}</Text>
                 <Text style={[styles.authorUsername, { color: theme.textTertiary }]} numberOfLines={1}>@{post.author.username}</Text>
-                <Text style={[styles.timestamp, { color: theme.textTertiary }]}>· {timeAgo(post.createdAt)}</Text>
+                <Text style={[styles.timestamp, { color: theme.textTertiary }]} numberOfLines={1}>· {timeAgo(post.createdAt)}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.moreButton}>
                 <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
@@ -229,19 +229,23 @@ const styles = StyleSheet.create({
   authorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
+    flex: 1, // Allow taking available space
+    marginRight: 10,
   },
   authorName: {
     fontWeight: 'bold',
     fontSize: 15,
     marginRight: 4,
+    flexShrink: 1, // Shrink first
   },
   authorUsername: {
     fontSize: 15,
     marginRight: 4,
+    flexShrink: 0, // Do not shrink
   },
   timestamp: {
     fontSize: 15,
+    flexShrink: 0, // Do not shrink
   },
   moreButton: {
     padding: 2,
