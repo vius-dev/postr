@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, FlatList } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { useTheme } from '@/theme/theme';
 import { Stack } from 'expo-router';
 import { api } from '@/lib/api';
@@ -26,15 +26,55 @@ export default function SessionsScreen() {
         }
     };
 
+    const handleRevoke = async (sessionId: string) => {
+        Alert.alert(
+            "Revoke Session",
+            "Are you sure you want to log out of this device?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Revoke",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await api.revokeSession(sessionId);
+                            // Refresh list and remove locally for immediate feedback
+                            setSessions(prev => prev.filter(s => s.id !== sessionId));
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to revoke session.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderItem = ({ item }: { item: Session }) => (
         <View style={[styles.sessionItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={{ flex: 1 }}>
-                <Text style={[styles.device, { color: theme.textPrimary }]}>{item.device}</Text>
+                <View style={styles.headerRow}>
+                    <Ionicons
+                        name={item.device.toLowerCase().includes('iphone') ? 'phone-portrait-outline' : item.device.toLowerCase().includes('mac') ? 'laptop-outline' : 'tablet-portrait-outline'}
+                        size={20}
+                        color={theme.textPrimary}
+                        style={{ marginRight: 8 }}
+                    />
+                    <Text style={[styles.device, { color: theme.textPrimary }]}>{item.device}</Text>
+                </View>
                 <Text style={[styles.location, { color: theme.textSecondary }]}>{item.location}</Text>
                 <Text style={[styles.lastActive, { color: theme.textTertiary }]}>Last active: {item.last_active}</Text>
             </View>
-            {item.is_current && (
-                <Text style={[styles.current, { color: theme.primary }]}>Current</Text>
+            {item.is_current ? (
+                <View style={styles.badgeContainer}>
+                    <Text style={[styles.current, { color: theme.primary }]}>Current</Text>
+                </View>
+            ) : (
+                <TouchableOpacity
+                    onPress={() => handleRevoke(item.id)}
+                    style={[styles.revokeButton, { backgroundColor: theme.surfaceHover }]}
+                >
+                    <Text style={[styles.revokeText, { color: theme.error }]}>Revoke</Text>
+                </TouchableOpacity>
             )}
         </View>
     );
@@ -99,5 +139,25 @@ const styles = StyleSheet.create({
     emptyText: {
         marginTop: 10,
         fontSize: 16,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    badgeContainer: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: 'rgba(29, 161, 242, 0.1)',
+    },
+    revokeButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    revokeText: {
+        fontSize: 14,
+        fontWeight: '600',
     }
 });

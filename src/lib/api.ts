@@ -1,6 +1,6 @@
 import { Post, ReactionAction, Comment, Media } from "@/types/post";
 import { PollChoice } from "@/types/poll";
-import { User, UserProfile } from "@/types/user";
+import { User, UserProfile, Session } from "@/types/user";
 import { Report, ReportableEntityType, ReportType } from "@/types/reports";
 import { createReport as createReportApi } from './reportsApi';
 import { FeedEngine } from './feed/FeedEngine';
@@ -130,6 +130,31 @@ const mutedMap = new Map<string, Set<string>>();
 
 /** Blocked users: userId -> Set<blockedUserId> */
 const blockedMap = new Map<string, Set<string>>();
+
+/** Username History Log */
+const usernameHistory: { user_id: string, old_username: string, changed_at: string }[] = [];
+
+/** All lists in the system */
+const reservedUsernames: { username: string; category: 'system' | 'role' | 'party' | 'politician'; reason: string; }[] = [
+  { username: 'admin', category: 'system', reason: 'System account' },
+  { username: 'support', category: 'system', reason: 'Support account' },
+  { username: 'pulse', category: 'system', reason: 'Platform name' },
+  { username: 'official', category: 'system', reason: 'Misleading authority' },
+  { username: 'moderator', category: 'system', reason: 'Staff impersonation' },
+  { username: 'verified', category: 'system', reason: 'Trust badge misuse' },
+  { username: 'president', category: 'role', reason: 'Political office' },
+  { username: 'governor', category: 'role', reason: 'Political office' },
+  { username: 'senator', category: 'role', reason: 'Political office' },
+  { username: 'minister', category: 'role', reason: 'Political office' },
+  { username: 'mayor', category: 'role', reason: 'Political office' },
+  { username: 'apc', category: 'party', reason: 'Political party' },
+  { username: 'pdp', category: 'party', reason: 'Political party' },
+  { username: 'labourparty', category: 'party', reason: 'Political party' },
+  { username: 'lp', category: 'party', reason: 'Political party' },
+  { username: 'tinubu', category: 'politician', reason: 'Public figure' },
+  { username: 'obi', category: 'politician', reason: 'Public figure' },
+  { username: 'atiku', category: 'politician', reason: 'Public figure' }
+];
 
 /** All lists in the system */
 const allLists: PostrList[] = [
@@ -1684,6 +1709,46 @@ export const api = {
     return updated;
   },
 
+  /**
+   * Get active sessions
+   */
+  getSessions: async (): Promise<Session[]> => {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return [
+      {
+        id: 'session-1',
+        device: 'iPhone 13 Pro',
+        location: 'San Francisco, CA',
+        last_active: 'Now',
+        is_current: true,
+      },
+      {
+        id: 'session-2',
+        device: 'MacBook Pro',
+        location: 'San Francisco, CA',
+        last_active: '2 hours ago',
+        is_current: false,
+      },
+      {
+        id: 'session-3',
+        device: 'iPad Air',
+        location: 'San Jose, CA',
+        last_active: '3 days ago',
+        is_current: false,
+      }
+    ];
+  },
+
+  /**
+   * Revoke a session
+   * @param sessionId - ID of the session to revoke
+   */
+  revokeSession: async (sessionId: string): Promise<boolean> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    console.log(`[API] Revoked session: ${sessionId}`);
+    return true;
+  },
+
   // ---------------------------------------------------------------------------
   // POST CREATION & MANAGEMENT
   // ---------------------------------------------------------------------------
@@ -2458,28 +2523,134 @@ export const api = {
 
   /**
    * Update current user's profile
-   * @param updates - Profile fields to update
    */
-  updateProfile: async (updates: Partial<UserProfile>): Promise<void> => {
-    const user = userMap.get(CURRENT_USER_ID);
-    if (!user) {
-      throw new Error('User not found');
+  updateProfile: async (updates: Partial<User>): Promise<User> => {
+    // Prevent direct username updates
+    if (updates.username) {
+      throw new Error('Username cannot be updated directly. Use updateUsernameRPC().');
     }
 
-    // Validate username if being updated
-    if (updates.username && updates.username !== user.username) {
-      const existing = allUsers.find(u =>
-        u.username.toLowerCase() === updates.username!.toLowerCase() &&
-        u.id !== CURRENT_USER_ID
-      );
-      if (existing) {
-        throw new Error('Username already taken');
+    const user = userMap.get(CURRENT_USER_ID);
+    if (!user) throw new Error('User not found');
+
+    const updatedUser = { ...user, ...updates };
+
+    // Update main storage
+    userMap.set(CURRENT_USER_ID, updatedUser);
+
+    // Update array
+    const idx = allUsers.findIndex(u => u.id === CURRENT_USER_ID);
+    if (idx !== -1) {
+      allUsers[idx] = updatedUser;
+    }
+
+    console.log(`[API] Profile updated for ${CURRENT_USER_ID}`);
+    return updatedUser;
+  },
+
+  /**
+   * Update User Country
+   */
+  updateCountry: async (country: string): Promise<User> => {
+    const user = userMap.get(CURRENT_USER_ID);
+    if (!user) throw new Error('User not found');
+
+    const updatedUser = { ...user, country };
+    userMap.set(CURRENT_USER_ID, updatedUser);
+
+    // Update array for consistency
+    const idx = allUsers.findIndex(u => u.id === CURRENT_USER_ID);
+    if (idx !== -1) {
+      allUsers[idx] = updatedUser;
+    }
+
+    console.log(`[API] Country updated to: ${country}`);
+    return updatedUser;
+  },
+
+  /**
+   * Request Data Archive
+   */
+  requestDataArchive: async (): Promise<void> => {
+    // Simulate delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log(`[API] Data archive requested for ${CURRENT_USER_ID}`);
+    // In a real app, this would trigger an email job
+
+  },
+
+  /**
+   * Secure RPC for Username Change
+   * Enforces:
+   * 1. Auth check
+   * 2. Normalize (lower/trim)
+   * 3. Length guard (4-15 chars)
+   * 4. Cooldown (14 days)
+   * 5. Uniqueness (Case-insensitive)
+   * 6. History logging
+   */
+  updateUsernameRPC: async (newUsername: string): Promise<void> => {
+    // 1. Auth check
+    const user = userMap.get(CURRENT_USER_ID);
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+
+
+    // 2. Normalize
+    const username = newUsername.trim().toLowerCase();
+
+    // 3. Length guard
+    if (username.length < 4 || username.length > 15) {
+      throw new Error('Invalid username length. Must be 4-15 characters.');
+    }
+
+    // Checking Reserved Usernames
+    const reserved = reservedUsernames.find(r => r.username === username);
+    if (reserved) {
+      throw new Error(`This username is reserved (${reserved.category}).`);
+    }
+
+    // 4. Cooldown check
+    if (user.last_username_change_at) {
+      const lastChange = new Date(user.last_username_change_at);
+      const daysSinceChange = (Date.now() - lastChange.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceChange < 14) {
+        throw new Error('Username can only be changed every 14 days.');
       }
     }
 
-    Object.assign(user, updates);
-    console.log(`[Profile] Updated profile for user ${CURRENT_USER_ID}`);
+    // 5. Uniqueness check
+    const existing = allUsers.find(u => u.username.toLowerCase() === username && u.id !== CURRENT_USER_ID);
+    if (existing) {
+      throw new Error('This username is already taken.'); // Code: 23505
+    }
+
+    // 6. Atomic Update & History
+    // Store old username in history
+    usernameHistory.push({
+      user_id: user.id,
+      old_username: user.username,
+      changed_at: new Date().toISOString()
+    });
+
+    // Update User object
+    const updatedUser = {
+      ...user,
+      username: username, // Update with normalized username
+      last_username_change_at: new Date().toISOString()
+    };
+
+    userMap.set(CURRENT_USER_ID, updatedUser);
+    const idx = allUsers.findIndex(u => u.id === CURRENT_USER_ID);
+    if (idx !== -1) {
+      allUsers[idx] = updatedUser;
+    }
+
+    console.log(`[RPC] Username changed: ${user.username} -> ${username}`);
   },
+
+
 
   /**
    * Get user's posts

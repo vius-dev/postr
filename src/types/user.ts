@@ -14,6 +14,7 @@ export type User = {
     is_suspended: boolean;
     is_muted: boolean;
     last_username_change_at?: string;
+    country?: string;
 };
 
 export type UserProfile = User & {

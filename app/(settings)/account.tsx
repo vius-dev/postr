@@ -1,20 +1,50 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { useAuthStore } from '@/state/auth';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { api } from '@/lib/api';
 
 export default function AccountSettings() {
     const { theme } = useTheme();
     const user = useAuthStore(state => state.user);
     const router = useRouter();
 
-    const InfoRow = ({ label, value }: { label: string, value: string }) => (
-        <View style={[styles.row, { borderBottomColor: theme.borderLight }]}>
-            <Text style={[styles.label, { color: theme.textPrimary }]}>{label}</Text>
-            <Text style={[styles.value, { color: theme.textSecondary }]}>{value}</Text>
-        </View>
+    const handleDataArchive = () => {
+        Alert.alert(
+            "Request Archive",
+            "We will email you a link to download your data when it's ready. This may take up to 24 hours.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Request",
+                    onPress: async () => {
+                        try {
+                            await api.requestDataArchive();
+                            Alert.alert("Request Received", "We'll notify you when it's ready.");
+                        } catch (e) {
+                            Alert.alert("Error", "Failed to request archive.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const InfoRow = ({ label, value, onPress, showArrow = false }: { label: string, value: string, onPress?: () => void, showArrow?: boolean }) => (
+        <TouchableOpacity
+            style={[styles.row, { borderBottomColor: theme.borderLight }]}
+            onPress={onPress}
+            disabled={!onPress}
+        >
+            <View>
+                <Text style={[styles.label, { color: theme.textPrimary }]}>{label}</Text>
+                <Text style={[styles.value, { color: theme.textSecondary, marginTop: 2 }]}>{value}</Text>
+            </View>
+            {(showArrow || onPress) && <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />}
+        </TouchableOpacity>
     );
 
     return (
@@ -23,37 +53,37 @@ export default function AccountSettings() {
             <ScrollView>
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Login and Security</Text>
-                    <InfoRow label="Username" value={`@${user?.user_metadata?.username || 'user'}`} />
+                    <InfoRow label="Username" value={`@${user?.user_metadata?.username || user?.username || 'user'}`} />
                     <InfoRow label="Email" value={user?.email || 'email@example.com'} />
-                    <TouchableOpacity
-                        style={[styles.row, { borderBottomColor: theme.borderLight }]}
+                    <InfoRow
+                        label="Phone"
+                        value={user?.phone || 'Not set'}
                         onPress={() => router.push('/(settings)/phone')}
-                    >
-                        <Text style={[styles.label, { color: theme.textPrimary }]}>Phone</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={[styles.value, { color: theme.textSecondary, marginRight: 5 }]}>
-                                {user?.phone || 'Not set'}
-                            </Text>
-                            <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
-                        </View>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.row, { borderBottomColor: theme.borderLight }]}
+                    />
+                    <InfoRow
+                        label="Password"
+                        value="Change your password"
                         onPress={() => router.push('/(settings)/password')}
-                    >
-                        <Text style={[styles.label, { color: theme.textPrimary }]}>Password</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={[styles.value, { color: theme.textSecondary, marginRight: 5 }]}>Change</Text>
-                            <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
-                        </View>
-                    </TouchableOpacity>
+                    />
                 </View>
 
                 <View style={[styles.section, { marginTop: 30 }]}>
                     <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Data and Permissions</Text>
-                    <InfoRow label="Country" value="United States" />
-                    <InfoRow label="Your Twitter Data" value="Download an archive of your data" />
-                    <InfoRow label="Apps and sessions" value="Track sessions" />
+                    <InfoRow
+                        label="Country"
+                        value={user?.country || "Select your country"}
+                        onPress={() => router.push('/(settings)/country')}
+                    />
+                    <InfoRow
+                        label="Your Twitter Data"
+                        value="Download an archive of your data"
+                        onPress={handleDataArchive}
+                    />
+                    <InfoRow
+                        label="Apps and sessions"
+                        value="Track sessions"
+                        onPress={() => router.push('/(settings)/sessions')}
+                    />
                 </View>
 
                 <TouchableOpacity
