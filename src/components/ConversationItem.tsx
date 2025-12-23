@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Conversation } from '@/types/message';
@@ -9,10 +8,21 @@ import { CURRENT_USER_ID } from '@/lib/api';
 
 interface ConversationItemProps {
     conversation: Conversation;
+    isUnread?: boolean;
+    isMuted?: boolean;
+    lastMessage?: string;
+    onPress?: () => void;
     onLongPress?: () => void;
 }
 
-export default function ConversationItem({ conversation, onLongPress }: ConversationItemProps) {
+export default function ConversationItem({ 
+    conversation, 
+    isUnread, 
+    isMuted, 
+    lastMessage, 
+    onPress, 
+    onLongPress 
+}: ConversationItemProps) {
     const { theme } = useTheme();
     const router = useRouter();
 
@@ -35,12 +45,17 @@ export default function ConversationItem({ conversation, onLongPress }: Conversa
             const otherUser = conversation.participants.find(p => p.id !== '0') || conversation.participants[0];
             return <Image source={{ uri: otherUser.avatar }} style={styles.avatar} />;
         } else {
-            const iconName = conversation.type === 'GROUP' ? 'people-outline' : 'megaphone-outline';
+            let iconName: keyof typeof Ionicons.glyphMap;
+            if (conversation.type === 'GROUP') {
+                iconName = 'people-outline';
+            } else { // CHANNEL
+                iconName = 'megaphone-outline';
+            }
             return (
                 <View style={[styles.avatar, { backgroundColor: theme.surface, justifyContent: 'center', alignItems: 'center' }]}>
                     <Ionicons name={iconName} size={28} color={theme.textSecondary} />
                 </View>
-            )
+            );
         }
     }
 
@@ -60,7 +75,7 @@ export default function ConversationItem({ conversation, onLongPress }: Conversa
     return (
         <TouchableOpacity
             style={[styles.container, { backgroundColor: theme.background }]}
-            onPress={() => router.push(`/conversation/${conversation.id}`)}
+            onPress={onPress ?? (() => router.push(`/conversation/${conversation.id}`))}
             onLongPress={onLongPress}
             delayLongPress={500}
         >
@@ -79,17 +94,20 @@ export default function ConversationItem({ conversation, onLongPress }: Conversa
                         style={[
                             styles.lastMessage,
                             { color: theme.textSecondary },
-                            conversation.unreadCount > 0 && { fontWeight: 'bold', color: theme.textPrimary }
+                            isUnread && { fontWeight: 'bold', color: theme.textPrimary }
                         ]}
                         numberOfLines={1}
                     >
-                        {conversation.lastMessage?.text || 'No messages yet'}
+                        {lastMessage ?? 'No messages yet'}
                     </Text>
-                    {conversation.unreadCount > 0 && (
-                        <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-                            <Text style={styles.badgeText}>{conversation.unreadCount}</Text>
-                        </View>
-                    )}
+                    <View style={{ alignItems: 'flex-end' }}>
+                        {isUnread && (
+                            <View style={[styles.badge, { backgroundColor: theme.primary, marginBottom: 4 }]} />
+                        )}
+                        {isMuted && (
+                            <Ionicons name="notifications-off-outline" size={16} color={theme.textTertiary} />
+                        )}
+                    </View>
                 </View>
             </View>
         </TouchableOpacity>
@@ -140,16 +158,8 @@ const styles = StyleSheet.create({
         marginRight: 10,
     },
     badge: {
-        minWidth: 18,
-        height: 18,
-        borderRadius: 9,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 5,
-    },
-    badgeText: {
-        color: 'white',
-        fontSize: 11,
-        fontWeight: 'bold',
+        width: 8,
+        height: 8,
+        borderRadius: 4
     },
 });

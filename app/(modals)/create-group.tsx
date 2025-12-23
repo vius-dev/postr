@@ -48,7 +48,7 @@ export default function CreateGroupScreen() {
     }
     try {
       const newConversation = await api.createGroupConversation(groupName.trim(), selectedUsers);
-      router.replace(`/conversation/${newConversation.id}`);
+      router.push(`/conversation/${newConversation.id}`);
     } catch (error) {
       console.error("Error creating group:", error);
     }

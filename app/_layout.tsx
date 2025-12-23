@@ -82,7 +82,7 @@ function RootLayoutNav() {
               <Stack.Screen name="(modals)/create-channel" options={{ headerShown: false }} />
               <Stack.Screen name="(modals)/poll" options={{ headerShown: false, presentation: 'modal' }} />
               <Stack.Screen name="(modals)/quote" options={{ headerShown: false, presentation: 'modal' }} />
-              <Stack.Screen name="conversation/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="conversation/[id]/index" options={{ headerShown: false }} />
               <Stack.Screen name="conversation/[id]/info" options={{ headerShown: false }} />
               <Stack.Screen name="explore/settings" options={{ headerShown: false }} />
               <Stack.Screen name="notifications/settings" options={{ headerShown: false }} />

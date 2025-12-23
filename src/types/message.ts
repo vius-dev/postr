@@ -23,4 +23,7 @@ export interface Conversation {
     adminIds?: string[];
     isPinned?: boolean;
     pinnedMessageId?: string;
+    isLowQuality?: boolean;
+    isMuted?: boolean;
 }
+

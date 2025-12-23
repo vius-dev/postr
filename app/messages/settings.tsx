@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { View, Text, StyleSheet, Switch, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMessagesSettings } from '@/state/communicationSettings';
 
 export default function MessagesSettingsScreen() {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const router = useRouter();
     const {
         allowMessageRequests,
@@ -43,7 +42,7 @@ export default function MessagesSettingsScreen() {
                             value={allowMessageRequests}
                             onValueChange={setAllowMessageRequests}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={allowMessageRequests ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={allowMessageRequests ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
 
@@ -58,7 +57,7 @@ export default function MessagesSettingsScreen() {
                             value={filterLowQuality}
                             onValueChange={setFilterLowQuality}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={filterLowQuality ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={filterLowQuality ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
 
@@ -66,14 +65,14 @@ export default function MessagesSettingsScreen() {
                         <View style={styles.settingInfo}>
                             <Text style={[styles.settingLabel, { color: theme.textPrimary }]}>Show read receipts</Text>
                             <Text style={[styles.settingDescription, { color: theme.textTertiary }]}>
-                                When this is on, people in a conversation will know when you've seen their messages.
+                                When this is on, people in a conversation will know when you\'ve seen their messages.
                             </Text>
                         </View>
                         <Switch
                             value={showReadReceipts}
                             onValueChange={setShowReadReceipts}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={showReadReceipts ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={showReadReceipts ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
                 </View>

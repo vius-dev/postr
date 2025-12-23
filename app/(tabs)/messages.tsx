@@ -1,27 +1,26 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
-import { Conversation, ConversationType } from '@/types/message';
+import { Conversation } from '@/types/message';
 import ConversationItem from '@/components/ConversationItem';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CURRENT_USER_ID } from '@/lib/api';
 import { useResponsive } from '@/hooks/useResponsive';
-
+import { eventEmitter } from '@/lib/EventEmitter';
+import { useMessagesSettings, useNotificationsSettings } from '@/state/communicationSettings';
 
 type FilterType = 'All' | 'DMs' | 'Groups' | 'Channels' | 'Unread';
-
-import { useMessagesSettings, useNotificationsSettings } from '@/state/communicationSettings';
 
 export default function MessagesScreen() {
   const { theme } = useTheme();
   const { showSidebar } = useResponsive();
   const router = useRouter();
-  const { allowMessageRequests } = useMessagesSettings();
+  const { allowMessageRequests, filterLowQuality } = useMessagesSettings();
   const { mutedWords } = useNotificationsSettings();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,21 +28,7 @@ export default function MessagesScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    loadConversations();
-    loadFollowing();
-  }, []);
-
-  const loadFollowing = async () => {
-    try {
-      const following = await api.getFollowing();
-      setFollowingIds(new Set(following.map(u => u.id)));
-    } catch (error) {
-      console.error('Error loading following:', error);
-    }
-  };
-
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getConversations();
@@ -53,11 +38,38 @@ export default function MessagesScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const loadFollowing = useCallback(async () => {
+    try {
+      const following = await api.getFollowing();
+      setFollowingIds(new Set(following.map(u => u.id)));
+    } catch (error) {
+      console.error('Error loading following:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+    loadFollowing();
+
+    const handleConversationRead = () => {
+      loadConversations();
+    };
+
+    eventEmitter.on('conversationRead', handleConversationRead);
+
+    return () => {
+      eventEmitter.off('conversationRead', handleConversationRead);
+    };
+  }, [loadConversations, loadFollowing]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter(conv => {
-      // 1. Message Requests Logic
+      if (filterLowQuality && conv.isLowQuality) {
+        return false;
+      }
+
       if (conv.type === 'DM' && !allowMessageRequests) {
         const otherParticipant = conv.participants.find(p => p.id !== CURRENT_USER_ID);
         if (otherParticipant && !followingIds.has(otherParticipant.id)) {
@@ -65,13 +77,11 @@ export default function MessagesScreen() {
         }
       }
 
-      // 2. Muted Words in Last Message
       if (mutedWords.length > 0 && conv.lastMessage?.text) {
         const lastMsg = conv.lastMessage.text.toLowerCase();
         if (mutedWords.some(word => lastMsg.includes(word))) return false;
       }
 
-      // 3. Search logic
       const query = searchQuery.toLowerCase();
       let matchesSearch = true;
       if (query) {
@@ -86,7 +96,6 @@ export default function MessagesScreen() {
 
       if (!matchesSearch) return false;
 
-      // Filter logic
       if (activeFilter === 'All') return true;
       if (activeFilter === 'Unread') return conv.unreadCount > 0;
       if (activeFilter === 'DMs') return conv.type === 'DM';
@@ -95,33 +104,54 @@ export default function MessagesScreen() {
 
       return true;
     });
-  }, [conversations, searchQuery, activeFilter]);
+  }, [conversations, searchQuery, activeFilter, allowMessageRequests, mutedWords, filterLowQuality, followingIds]);
 
-  const { pinnedConversations, otherConversations } = useMemo(() => {
-    // Only show pinned section if filter is 'All' or user is searching
-    if (activeFilter !== 'All' && !searchQuery) {
-      return { pinnedConversations: [], otherConversations: filteredConversations };
-    }
-
+  const { pinned, dms, groups, channels } = useMemo(() => {
     const pinned = filteredConversations.filter(c => c.isPinned);
-    const others = filteredConversations.filter(c => !c.isPinned);
-    return { pinnedConversations: pinned, otherConversations: others };
-  }, [filteredConversations, activeFilter, searchQuery]);
+    const dms = filteredConversations.filter(c => c.type === 'DM' && !c.isPinned);
+    const groups = filteredConversations.filter(c => c.type === 'GROUP' && !c.isPinned);
+    const channels = filteredConversations.filter(c => c.type === 'CHANNEL' && !c.isPinned);
+
+    return { pinned, dms, groups, channels };
+  }, [filteredConversations]);
 
   const filters: FilterType[] = ['All', 'DMs', 'Groups', 'Channels', 'Unread'];
 
-  const handlePin = async (convId: string, pinned: boolean) => {
+  const handlePin = async (convId: string) => {
+    const conversation = conversations.find(c => c.id === convId);
+    if (!conversation) return;
+
     try {
-      await api.pinConversation(convId, pinned);
+      await api.pinConversation(convId, !conversation.isPinned);
       loadConversations();
     } catch (error) {
       console.error('Error pinning conversation:', error);
     }
   };
 
+  const renderSection = (title: string, data: Conversation[]) => {
+    if (data.length === 0) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitleText, { color: theme.textTertiary }]}>{title}</Text>
+        </View>
+        {data.map(conv => (
+          <ConversationItem
+            key={conv.id}
+            conversation={conv}
+            isUnread={conv.unreadCount > 0}
+            isMuted={conv.isMuted}
+            lastMessage={conv.lastMessage?.text}
+            onLongPress={() => handlePin(conv.id)}
+          />
+        ))}
+      </View>
+    )
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.textPrimary }]}>Messages</Text>
         <TouchableOpacity onPress={() => router.push('/messages/settings')}>
@@ -129,7 +159,6 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <ExploreSearchBar
           value={searchQuery}
@@ -138,7 +167,6 @@ export default function MessagesScreen() {
         />
       </View>
 
-      {/* Filter Chips */}
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContent}>
           {filters.map(filter => (
@@ -162,34 +190,20 @@ export default function MessagesScreen() {
       </View>
 
       <FlatList
-        data={otherConversations}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <ConversationItem
-            conversation={item}
-            onLongPress={() => handlePin(item.id, !item.isPinned)}
-          />
-        )}
+        data={activeFilter === 'All' ? ['pinned', 'dms', 'groups', 'channels'] : ['filtered']}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => {
+          if (activeFilter !== 'All') {
+            return <View>{renderSection('', filteredConversations)}</View>
+          }
+          if (item === 'pinned') return renderSection('Pinned', pinned);
+          if (item === 'dms') return renderSection('Direct Messages', dms);
+          if (item === 'groups') return renderSection('Groups', groups);
+          if (item === 'channels') return renderSection('Channels', channels);
+          return null;
+        }}
         refreshing={loading}
         onRefresh={loadConversations}
-        ListHeaderComponent={
-          pinnedConversations.length > 0 ? (
-            <View style={styles.pinnedSection}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="pin" size={14} color={theme.textTertiary} style={{ marginRight: 6 }} />
-                <Text style={[styles.sectionTitleText, { color: theme.textTertiary }]}>PINNED MESSAGES</Text>
-              </View>
-              {pinnedConversations.map(conv => (
-                <ConversationItem
-                  key={conv.id}
-                  conversation={conv}
-                  onLongPress={() => handlePin(conv.id, false)}
-                />
-              ))}
-              <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            </View>
-          ) : null
-        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
@@ -207,7 +221,6 @@ export default function MessagesScreen() {
         }
       />
 
-      {/* Compose FAB */}
       {!showSidebar && (
         <TouchableOpacity
           style={[
@@ -265,15 +278,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  pinnedSection: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'transparent',
+  section: {
+    marginTop: 10,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingTop: 15,
     paddingBottom: 5,
   },
   sectionTitleText: {

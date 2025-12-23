@@ -23,7 +23,7 @@ export default function CreateChannelScreen() {
     setLoading(true);
     try {
       const newChannel = await api.createChannelConversation(channelName.trim(), description.trim());
-      router.replace(`/conversation/${newChannel.id}`);
+      router.push(`/conversation/${newChannel.id}`);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to create channel');
     } finally {

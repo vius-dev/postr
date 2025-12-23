@@ -3842,6 +3842,22 @@ export const api = {
   // ADMIN ENDPOINTS
   // ---------------------------------------------------------------------------
 
+  markConversationAsRead: async (conversationId: string): Promise<void> => {
+    const conversation = mockConversations.find(c => c.id === conversationId);
+    if (conversation) {
+      conversation.unreadCount = 0;
+      eventEmitter.emit('conversationRead', conversationId);
+    }
+  },
+
+  getUserId: () => CURRENT_USER_ID,
+
+  getInviteLink: async (conversationId: string): Promise<string> => {
+    return `https://postr.dev/join/${conversationId}`;
+  },
+
+
+
   admin: adminApi,
 
   /**
