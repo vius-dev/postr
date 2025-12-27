@@ -61,11 +61,11 @@ const PostDetailScreen = () => {
         } else {
           // If it's a nested reply, it's harder to place optimistically without more logic, 
           // but we can at least refresh or append. For now, let's refresh.
-          api.fetchPostWithLineage(id as string).then(res => {
+          api.fetchPostWithLineage(id as string).then((res: { post: Post, parents: Post[] } | undefined) => {
             if (res) {
-              const parents = res.parents.map(p => ({ ...p, itemType: 'parent' as const }));
+              const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
               const focalPost: ListItem = { ...res.post, itemType: 'focal' };
-              const replies = (res.post.comments || []).map(c => ({
+              const replies = (res.post.comments || []).map((c: Comment) => ({
                 ...c,
                 depth: 0,
                 itemType: 'reply' as const,

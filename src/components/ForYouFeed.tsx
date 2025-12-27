@@ -31,7 +31,7 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
   const loadInitialPosts = async () => {
     setLoading(true);
     try {
-      const initialPosts = await api.getForYouFeed();
+      const { posts: initialPosts } = await api.getForYouFeed();
       setPosts(initialPosts);
     } catch (error) {
       console.error('Error loading for you feed:', error);
@@ -41,10 +41,13 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
   };
 
   const loadMorePosts = async () => {
-    if (loadingMore || loading) return;
+    if (loadingMore || loading || posts.length === 0) return;
     setLoadingMore(true);
     try {
-      const morePosts = await api.getForYouFeed(posts.length);
+      const lastPost = posts[posts.length - 1];
+      const { posts: morePosts } = await api.getForYouFeed({
+        cursor: lastPost.createdAt
+      });
       setPosts(prevPosts => [...prevPosts, ...morePosts]);
     } catch (error) {
       console.error('Error loading more posts:', error);

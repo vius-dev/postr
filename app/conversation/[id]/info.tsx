@@ -65,9 +65,9 @@ export default function ConversationInfoScreen() {
       'Are you sure you want to delete this channel? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive', 
+        {
+          text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
             try {
               await api.deleteConversation(conversationId);

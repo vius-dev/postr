@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNotificationsSettings } from '@/state/communicationSettings';
 
 export default function NotificationsSettingsScreen() {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const router = useRouter();
     const {
         qualityFilter,
@@ -53,7 +53,7 @@ export default function NotificationsSettingsScreen() {
                             value={qualityFilter}
                             onValueChange={setQualityFilter}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={qualityFilter ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={qualityFilter ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
 
@@ -68,7 +68,7 @@ export default function NotificationsSettingsScreen() {
                             value={mentionsOnly}
                             onValueChange={setMentionsOnly}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={mentionsOnly ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={mentionsOnly ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
                 </View>

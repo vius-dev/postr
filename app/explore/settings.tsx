@@ -21,7 +21,7 @@ const LOCATIONS = [
 ];
 
 export default function ExploreSettingsScreen() {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
     const router = useRouter();
     const {
         showLocationContent,
@@ -64,7 +64,7 @@ export default function ExploreSettingsScreen() {
                             value={showLocationContent}
                             onValueChange={setShowLocationContent}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={showLocationContent ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={showLocationContent ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
 
@@ -100,7 +100,7 @@ export default function ExploreSettingsScreen() {
                             value={personalizeTrends}
                             onValueChange={setPersonalizeTrends}
                             trackColor={{ false: theme.border, true: theme.primary + '80' }}
-                            thumbColor={personalizeTrends ? theme.primary : (theme.mode === 'dark' ? '#999' : '#f4f3f4')}
+                            thumbColor={personalizeTrends ? theme.primary : (isDarkMode ? '#999' : '#f4f3f4')}
                         />
                     </View>
                 </View>
