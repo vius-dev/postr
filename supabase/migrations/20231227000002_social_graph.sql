@@ -5,7 +5,7 @@
 -- 1. NOTIFICATIONS
 -- Rule: Recipient ownership
 create table public.notifications (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     recipient_id uuid references public.profiles(id) on delete cascade not null,
     actor_id uuid references public.profiles(id) on delete cascade, -- Optional (e.g. system notification)
     type text check (type in ('FOLLOW', 'MENTION', 'REPLY', 'LIKE', 'REPOST', 'POLL_ENDED', 'SYSTEM')) not null,
@@ -87,7 +87,7 @@ create table public.polls (
 );
 
 create table public.poll_options (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     poll_id uuid references public.polls(post_id) on delete cascade not null,
     label text not null,
     vote_count int default 0,

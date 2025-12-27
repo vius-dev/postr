@@ -1,15 +1,16 @@
 
 // src/api/files.ts
 
-// This file will contain a stub for the files API.
-// It will be extended with API calls for file uploads and downloads.
-
+/**
+ * Uploads a file to Supabase storage or a target CDN.
+ * This is currently a stub that returns a placeholder image.
+ */
 export const uploadFile = async (file: any): Promise<string> => {
   // Simulate network delay
   await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log('Mock uploading file:', file.name || 'unknown');
 
-  // Return a random high-quality image from Picsum
+  // NOTE: In production, use supabase.storage.from('bucket').upload()
+  // For now, we return a reliable placeholder service
   const randomId = Math.floor(Math.random() * 1000);
-  return `https://picsum.photos/id/${randomId}/800/600`;
+  return `https://images.unsplash.com/photo-${randomId}?auto=format&fit=crop&w=800&q=80`;
 };

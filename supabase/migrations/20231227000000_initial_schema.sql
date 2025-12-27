@@ -48,7 +48,7 @@ create policy "Users can update own profile"
 create type public.post_visibility as enum ('public', 'followers', 'private');
 
 create table public.posts (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     owner_id uuid references public.profiles(id) on delete cascade not null,
     content text,
     type text check (type in ('original', 'repost', 'quote')) default 'original',
@@ -92,7 +92,7 @@ create policy "Users can soft delete own posts"
 -- 5. CONTENT MEDIA (post_media)
 -- Separated from posts table
 create table public.post_media (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     post_id uuid references public.posts(id) on delete cascade not null,
     url text not null,
     type text check (type in ('image', 'video')) not null,
@@ -115,7 +115,7 @@ create policy "Users can add media to own posts"
 -- Matches api.ts: reactionsMap
 -- Rule: Actor-Subject Pattern
 create table public.post_reactions (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     actor_id uuid references public.profiles(id) on delete cascade not null, -- Who
     subject_id uuid references public.posts(id) on delete cascade not null, -- What
     type text check (type in ('LIKE', 'DISLIKE', 'LAUGH')) not null,

@@ -42,6 +42,7 @@ const ComposeScreen = () => {
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [isEditing, setIsEditing] = useState(mode === 'edit');
   const [originalPost, setOriginalPost] = useState<Post | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load post for editing
   useEffect(() => {
@@ -81,8 +82,8 @@ const ComposeScreen = () => {
   }, [quotePostId]);
 
   const characterCount = text.length;
-  // Allow empty media if it's an edit (might just be removing text, or keeping old media reference [which we don't display here for simplicity])
-  const isPostButtonDisabled = (characterCount === 0 && media.length === 0) || characterCount > MAX_CHARACTERS;
+  // Allow empty media if it's an edit
+  const isPostButtonDisabled = isSubmitting || (characterCount === 0 && media.length === 0) || characterCount > MAX_CHARACTERS;
 
   const handleCancel = () => {
     if (text.length > 0 || media.length > 0) {
@@ -101,6 +102,8 @@ const ComposeScreen = () => {
   };
 
   const handlePost = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       if (isEditing && postId) {
         // EDIT EXISTING POST
@@ -123,6 +126,8 @@ const ComposeScreen = () => {
     } catch (error: any) {
       console.error('Failed to create/update post', error);
       Alert.alert('Error', error.message || 'Failed to submit. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -162,7 +167,7 @@ const ComposeScreen = () => {
         </Pressable>
         <Pressable onPress={handlePost} disabled={isPostButtonDisabled}>
           <Text style={[styles.postButton, { color: isPostButtonDisabled ? theme.textTertiary : theme.link }]}>
-            {isEditing ? 'Save' : (replyToId ? 'Reply' : 'Post')}
+            {isSubmitting ? (isEditing ? 'Saving...' : 'Posting...') : (isEditing ? 'Save' : (replyToId ? 'Reply' : 'Post'))}
           </Text>
         </Pressable>
       </View>

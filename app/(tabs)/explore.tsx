@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
@@ -22,20 +22,34 @@ export default function ExploreScreen() {
   const [searchResults, setSearchResults] = useState<{ posts: Post[], users: User[] }>({ posts: [], users: [] });
   const [isSearching, setIsSearching] = useState(false);
   const [trends, setTrends] = useState<{ hashtag: string, count: number }[]>([]);
+  const [loadingTrends, setLoadingTrends] = useState(false);
   const [visibleTrendsCount, setVisibleTrendsCount] = useState(5);
 
   React.useEffect(() => {
     const fetchTrends = async () => {
-      // In a real app, we'd pass these settings to the API
-      // Fetch more trends initially to allow expanding
-      const trendingData = await api.getTrends(20);
+      setLoadingTrends(true);
+      try {
+        // In a real app, we'd pass these settings to the API
+        // Fetch more trends initially to allow expanding
+        const trendingData = await api.getTrends(20);
 
-      // For personalizing, we might shuffle or filter if this was a real backend
-      // Here we just simulate it by slightly changing the order or count
-      if (!personalizeTrends) {
-        setTrends(trendingData.slice().reverse()); // Just to show a difference
-      } else {
-        setTrends(trendingData);
+        if (!trendingData) {
+          setTrends([]);
+          return;
+        }
+
+        // For personalizing, we might shuffle or filter if this was a real backend
+        // Here we just simulate it by slightly changing the order or count
+        if (!personalizeTrends) {
+          setTrends(trendingData.slice().reverse()); // Just to show a difference
+        } else {
+          setTrends(trendingData);
+        }
+      } catch (error) {
+        console.error('Error fetching trends:', error);
+        setTrends([]);
+      } finally {
+        setLoadingTrends(false);
       }
     };
     fetchTrends();
@@ -157,15 +171,25 @@ export default function ExploreScreen() {
                 <Text style={[styles.trendsTitle, { color: theme.textPrimary }]}>
                   {personalizeTrends ? 'Trends for you' : `Trending in ${showLocationContent ? 'Your Location' : explorationLocation}`}
                 </Text>
-                {trends.slice(0, visibleTrendsCount).map((item, index) => (
-                  <View key={item.hashtag}>
-                    {renderTrendItem({ item, index })}
+                {loadingTrends ? (
+                  <ActivityIndicator style={{ marginVertical: 20 }} color={theme.primary} />
+                ) : trends.length === 0 ? (
+                  <View style={{ padding: 15 }}>
+                    <Text style={{ color: theme.textTertiary }}>No trends available right now</Text>
                   </View>
-                ))}
-                {visibleTrendsCount < trends.length && (
-                  <TouchableOpacity style={styles.showMoreTrends} onPress={handleShowMore}>
-                    <Text style={{ color: theme.primary, fontSize: 15 }}>Show more</Text>
-                  </TouchableOpacity>
+                ) : (
+                  <>
+                    {trends.slice(0, visibleTrendsCount).map((item, index) => (
+                      <View key={item.hashtag}>
+                        {renderTrendItem({ item, index })}
+                      </View>
+                    ))}
+                    {visibleTrendsCount < trends.length && (
+                      <TouchableOpacity style={styles.showMoreTrends} onPress={handleShowMore}>
+                        <Text style={{ color: theme.primary, fontSize: 15 }}>Show more</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
                 )}
               </View>
               <View style={[styles.divider, { backgroundColor: theme.surface }]} />

@@ -19,6 +19,8 @@ import { timeAgo } from '@/utils/time'; // Import a time formatting utility
 import MediaGrid from '@/components/MediaGrid';
 import ImageViewer from '@/components/ImageViewer';
 
+import { isAuthorityActive } from '@/utils/user';
+
 interface PostCardProps {
   post: Post;
   isFocal?: boolean;
@@ -27,6 +29,9 @@ interface PostCardProps {
 export default function PostCard({ post, isFocal = false }: PostCardProps) {
   const router = useRouter();
   const { theme } = useTheme();
+
+  const showAuthority = isAuthorityActive(post.author);
+
   const {
     counts,
     userReactions,
@@ -117,6 +122,12 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
             <View style={styles.authorContainer}>
               <TouchableOpacity onPress={goToProfile} activeOpacity={0.7} style={styles.authorInfo}>
                 <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{post.author.name}</Text>
+                {showAuthority && (
+                  <Image source={{ uri: post.author.official_logo }} style={styles.officialLogo} contentFit="contain" />
+                )}
+                {post.author.is_verified && !showAuthority && (
+                  <Ionicons name="checkmark-circle" size={14} color={theme.primary} style={styles.verifiedBadge} />
+                )}
                 <Text style={[styles.authorUsername, { color: theme.textTertiary }]} numberOfLines={1}>@{post.author.username}</Text>
                 <Text style={[styles.timestamp, { color: theme.textTertiary }]} numberOfLines={1}>
                   · {timeAgo(post.createdAt)}
@@ -253,6 +264,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1, // Allow taking available space
     marginRight: 10,
+  },
+  officialLogo: {
+    width: 14,
+    height: 14,
+    marginLeft: 2,
+    marginRight: 2,
+  },
+  verifiedBadge: {
+    marginLeft: 2,
+    marginRight: 2,
   },
   authorName: {
     fontWeight: 'bold',

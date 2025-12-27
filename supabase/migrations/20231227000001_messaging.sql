@@ -2,27 +2,14 @@
 -- MESSAGING MODULE
 -- Migration: 20231227000001_messaging.sql
 
+
 -- 1. CONVERSATIONS
 create table public.conversations (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     type text check (type in ('PRIVATE', 'GROUP')) default 'PRIVATE',
     created_at timestamptz default now(),
     updated_at timestamptz default now()
 );
-
--- RLS: Conversations
--- Rule: Access via participants table key
-alter table public.conversations enable row level security;
-
-create policy "Conversations viewable by participants"
-    on public.conversations for select
-    using (
-        exists (
-            select 1 from public.conversation_participants
-            where conversation_id = conversations.id
-            and user_id = auth.uid()
-        )
-    );
 
 -- 2. PARTICIPANTS
 create table public.conversation_participants (
@@ -35,9 +22,38 @@ create table public.conversation_participants (
     primary key (conversation_id, user_id)
 );
 
--- RLS: Participants
-alter table public.conversation_participants enable row level security;
+-- 3. MESSAGES
+create table public.messages (
+    id uuid default gen_random_uuid() primary key,
+    conversation_id uuid references public.conversations(id) on delete cascade not null,
+    sender_id uuid references public.profiles(id) on delete cascade not null,
+    content text,
+    media_url text, -- Optional media attachment
+    type text check (type in ('TEXT', 'IMAGE', 'SYSTEM')) default 'TEXT',
+    created_at timestamptz default now(),
+    updated_at timestamptz default now(),
+    deleted_at timestamptz -- Soft delete
+);
 
+-- RLS: Enable
+alter table public.conversations enable row level security;
+alter table public.conversation_participants enable row level security;
+alter table public.messages enable row level security;
+
+-- RLS: Policies
+
+-- Conversations
+create policy "Conversations viewable by participants"
+    on public.conversations for select
+    using (
+        exists (
+            select 1 from public.conversation_participants
+            where conversation_id = conversations.id
+            and user_id = auth.uid()
+        )
+    );
+
+-- Participants
 create policy "Users can see their own participations"
     on public.conversation_participants for select
     using (user_id = auth.uid());
@@ -52,23 +68,7 @@ create policy "Users can see other participants in their chats"
         )
     );
 
--- 3. MESSAGES
-create table public.messages (
-    id uuid default uuid_generate_v4() primary key,
-    conversation_id uuid references public.conversations(id) on delete cascade not null,
-    sender_id uuid references public.profiles(id) on delete cascade not null,
-    content text,
-    media_url text, -- Optional media attachment
-    type text check (type in ('TEXT', 'IMAGE', 'SYSTEM')) default 'TEXT',
-    created_at timestamptz default now(),
-    updated_at timestamptz default now(),
-    deleted_at timestamptz -- Soft delete
-);
-
--- RLS: Messages
--- Rule: Access via conversation participation
-alter table public.messages enable row level security;
-
+-- Messages
 create policy "Messages viewable by conversation participants"
     on public.messages for select
     using (

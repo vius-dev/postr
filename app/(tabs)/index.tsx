@@ -54,25 +54,23 @@ export default function FeedScreen() {
 
   const { isDesktop, isTablet, isWeb } = useResponsive();
 
-  if (loading && posts.length === 0) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
-      </View>
-    );
-  }
-
   const Container = isWeb ? View : SafeAreaView;
 
   return (
     <Container style={[styles.container, { backgroundColor: theme.background }]}>
       <HomeHeader />
-      <FeedList
-        posts={posts}
-        onRefresh={handleRefresh}
-        onLoadMore={handleLoadMore}
-        refreshing={loading}
-      />
+      {loading && posts.length === 0 ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      ) : (
+        <FeedList
+          posts={posts}
+          onRefresh={handleRefresh}
+          onLoadMore={handleLoadMore}
+          refreshing={loading}
+        />
+      )}
       <FAB />
     </Container>
   );

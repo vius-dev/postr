@@ -4,7 +4,7 @@ import { User } from "@/types/user";
 
 export type ReactionAction = 'LIKE' | 'DISLIKE' | 'LAUGH' | 'NONE';
 
-export type Author = Pick<User, 'id' | 'name' | 'username' | 'avatar' | 'is_suspended' | 'is_shadow_banned' | 'is_limited'>;
+export type Author = Pick<User, 'id' | 'name' | 'username' | 'avatar' | 'is_suspended' | 'is_shadow_banned' | 'is_limited' | 'is_verified' | 'verification_type' | 'official_logo' | 'authority_end'>;
 
 export type Media = {
   type: 'image' | 'video';

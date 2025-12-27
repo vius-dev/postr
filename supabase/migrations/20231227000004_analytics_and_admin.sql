@@ -5,7 +5,7 @@
 -- 1. POST VIEWS (Analytics)
 -- High volume, append-only
 create table public.post_views (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     post_id uuid references public.posts(id) on delete cascade not null,
     user_id uuid references public.profiles(id) on delete set null, -- Optional (for logged out views)
     ip_hash text, -- For anon tracking
@@ -23,7 +23,7 @@ create policy "Users can record views"
 
 -- 2. USERNAME HISTORY (Audit Log)
 create table public.username_history (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     user_id uuid references public.profiles(id) on delete cascade not null,
     old_username text not null,
     new_username text not null,

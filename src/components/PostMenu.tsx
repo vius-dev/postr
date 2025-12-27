@@ -22,6 +22,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -38,6 +39,8 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
   }, [visible, post.id, post.author.id]);
 
   const handleBookmark = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       const status = await api.toggleBookmark(post.id);
       setIsBookmarked(status);
@@ -45,6 +48,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     } catch (error) {
       Alert.alert('Error', 'Could not update bookmark.');
     } finally {
+      setIsProcessing(false);
       onClose();
     }
   };
@@ -53,7 +57,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     try {
       await Share.share({
         message: `${post.author.name} (@${post.author.username}): ${post.content}\n\nShared from Postr`,
-        url: `https://postr.dev/post/${post.id}`, // Mock URL
+        url: `https://postr.app/post/${post.id}`, // Production-ready URL placeholder
       });
     } catch (error) {
       console.error('Error sharing post', error);
@@ -63,6 +67,8 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
   };
 
   const handleFollow = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       if (isFollowing) {
         await api.unfollowUser(post.author.id);
@@ -76,11 +82,14 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     } catch (error) {
       Alert.alert('Error', 'Could not update follow status.');
     } finally {
+      setIsProcessing(false);
       onClose();
     }
   };
 
   const handleMute = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       if (isMuted) {
         await api.unmuteUser(post.author.id);
@@ -94,11 +103,14 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     } catch (error) {
       Alert.alert('Error', 'Action failed. Please try again.');
     } finally {
+      setIsProcessing(false);
       onClose();
     }
   };
 
   const handleBlock = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       if (isBlocked) {
         await api.unblockUser(post.author.id);
@@ -112,6 +124,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     } catch (error) {
       Alert.alert('Error', 'Action failed. Please try again.');
     } finally {
+      setIsProcessing(false);
       onClose();
     }
   };
@@ -121,12 +134,16 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
   };
 
   const handleReportSubmit = async (reportType: ReportType, reason?: string) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
-      await api.createReport('POST', post.id, reportType, '0', reason || '');
+      if (!user) return;
+      await api.createReport('POST', post.id, reportType, user.id, reason || '');
       Alert.alert('Post Reported', 'Thank you for your report. We will review it shortly.');
     } catch (error) {
       Alert.alert('Error', 'Could not report post. Please try again.');
     } finally {
+      setIsProcessing(false);
       setReportModalVisible(false);
       onClose();
     }

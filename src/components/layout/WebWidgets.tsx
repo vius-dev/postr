@@ -35,12 +35,12 @@ export const WebWidgets = () => {
                     </View>
                 </View>
 
-                {/* Who to follow - Mock */}
+                {/* Who to follow */}
                 <View style={[styles.widgetCard, { backgroundColor: theme.surface, marginTop: 15 }]}>
                     <Text style={[styles.widgetTitle, { color: theme.textPrimary }]}>Who to follow</Text>
-                    <View style={styles.mockUser}>
+                    <View style={styles.recommendedUser}>
                         <View style={[styles.avatar, { backgroundColor: theme.border }]} />
-                        <View style={styles.mockUserInfo}>
+                        <View style={styles.recommendedUserInfo}>
                             <Text style={[styles.userName, { color: theme.textPrimary }]} numberOfLines={1}>React Native</Text>
                             <Text style={[styles.userHandle, { color: theme.textTertiary }]} numberOfLines={1}>@reactnative</Text>
                         </View>
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
         borderRadius: 30,
         paddingTop: 20,
-        // Mock Glass effect
+        // Glass effect
         backgroundColor: 'rgba(255,255,255,0.0)', // Transparent container, widgets float inside
     },
     searchWrapper: {
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     showMoreText: {
         fontSize: 15,
     },
-    mockUser: {
+    recommendedUser: {
         flexDirection: 'row',
         padding: 15,
         alignItems: 'center',
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
         height: 40,
         borderRadius: 20,
     },
-    mockUserInfo: {
+    recommendedUserInfo: {
         flex: 1,
     },
     userName: {

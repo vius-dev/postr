@@ -2,6 +2,7 @@ import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,22 +11,29 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const router = useRouter();
   const { theme } = useTheme();
 
   const handleRegister = async () => {
+    if (!email || !password || isRegistering) return;
+
     if (password !== confirmPassword) {
       alert("Passwords don't match!");
       return;
     }
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (error) {
-      alert(error.message);
-    } else {
+
+    setIsRegistering(true);
+    try {
+      // Derive name and username from email if not provided by separate fields 
+      // (The current UI only has email/pass, so handle_new_user trigger will derive them)
+      await api.register(email, password, '', '');
       alert('Registration successful! Please check your email to confirm your account.');
+      router.back();
+    } catch (error: any) {
+      alert(error.message || 'Registration failed');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -84,9 +92,12 @@ export default function RegisterScreen() {
 
             <TouchableOpacity
               onPress={handleRegister}
-              style={[styles.registerButton, { backgroundColor: theme.primary }]}
+              style={[styles.registerButton, { backgroundColor: theme.primary, opacity: isRegistering ? 0.7 : 1 }]}
+              disabled={isRegistering}
             >
-              <Text style={[styles.registerButtonText, { color: theme.textInverse }]}>Sign up</Text>
+              <Text style={[styles.registerButtonText, { color: theme.textInverse }]}>
+                {isRegistering ? 'Signing up...' : 'Sign up'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push('/login')} style={styles.loginLink}>

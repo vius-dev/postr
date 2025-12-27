@@ -5,8 +5,6 @@ import { Notification } from "@/types/notification";
 import { Conversation, Message } from "@/types/message";
 import { ViewerRelationship } from "@/components/profile/ProfileActionRow";
 
-// MOCK CONSTANTS (To prevent immediate crashes on UI that relies on these)
-export const CURRENT_USER_ID = 'user_id_placeholder';
 
 export interface PrivacySettings {
   protectPosts: boolean;
@@ -50,11 +48,42 @@ const mapPost = (row: any): Post => {
 };
 
 /**
+ * Maps a raw database row from the 'profiles' table to the strict User type.
+ */
+const mapProfile = (row: any): User => {
+  if (!row) return null as any;
+  return {
+    id: row.id,
+    name: row.name,
+    username: row.username,
+    avatar: row.avatar,
+    headerImage: row.header_image,
+    bio: row.bio,
+    location: row.location,
+    website: row.website,
+    is_active: row.is_active,
+    is_limited: row.is_limited,
+    is_shadow_banned: row.is_shadow_banned,
+    is_suspended: row.is_suspended,
+    is_muted: row.is_muted || false,
+    is_verified: row.is_verified || false,
+    verification_type: row.verification_type,
+    official_logo: row.official_logo,
+    username_status: row.username_status,
+    authority_start: row.authority_start,
+    authority_end: row.authority_end,
+    last_username_change_at: row.last_username_change_at,
+    country: row.country
+  };
+};
+
+/**
  * Batch hydrates posts with current-user-specific status (reactions, bookmarks).
  */
 const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
   if (posts.length === 0) return posts;
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return posts;
 
   const postIds = posts.map(p => p.id);
@@ -90,7 +119,23 @@ export const api = {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+    // Retry fetching profile briefly in case trigger is slow
+    let profile = null;
+    for (let i = 0; i < 3; i++) {
+      const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      if (p) {
+        profile = p;
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    if (!profile) {
+      // Emergency fall-through if trigger failed
+      await api.ensureProfileExists(data.user);
+      const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      profile = p;
+    }
 
     await supabase.from('user_sessions').insert({
       user_id: data.user.id,
@@ -100,7 +145,7 @@ export const api = {
     });
 
     return {
-      user: { ...data.user, ...profile } as unknown as User,
+      user: mapProfile(profile),
       session: data.session
     };
   },
@@ -114,7 +159,10 @@ export const api = {
       }
     });
     if (error) throw error;
-    return { user: data.user as unknown as User, session: data.session };
+
+    // We don't map profile here because it's handled by the trigger 
+    // and navigation usually waits for session update which triggers hydrate in AuthProvider
+    return { user: data.user as any, session: data.session };
   },
 
   logout: async (): Promise<void> => {
@@ -141,19 +189,21 @@ export const api = {
       .single();
 
     if (!profile) {
+      let username = authUser.user_metadata?.username || authUser.email?.split('@')[0] || `user_${authUser.id.split('-')[0]}`;
+
+      // Ensure length
+      if (username.length < 3) username = username + '_' + Math.floor(Math.random() * 100);
+
       const { error } = await supabase.from('profiles').insert({
         id: authUser.id,
-        username: authUser.user_metadata?.username || `user_${authUser.id.split('-')[0]}`,
-        name: authUser.user_metadata?.name || 'New User',
+        username: username,
+        name: authUser.user_metadata?.name || username,
         avatar: authUser.user_metadata?.avatar || `https://i.pravatar.cc/150?u=${authUser.id}`
       });
-      if (error) console.error('Error creating profile:', error);
+      if (error) console.error('Error creating profile manually:', error);
     }
   },
 
-  setSessionUser: (userId: string): void => {
-    (api as any).CURRENT_USER_ID = userId;
-  },
 
   getSessions: async (): Promise<Session[]> => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -191,7 +241,7 @@ export const api = {
       .from('posts')
       .select(`
                 *,
-                author:profiles(*),
+                author:profiles!posts_owner_id_fkey(*),
                 media:post_media(*),
                 reaction_counts:reaction_aggregates(*)
             `)
@@ -293,7 +343,7 @@ export const api = {
       .from('posts')
       .select(`
                 *,
-                author:profiles(*),
+                author:profiles!posts_owner_id_fkey(*),
                 media:post_media(*),
                 reaction_counts:reaction_aggregates(*)
             `)
@@ -385,14 +435,32 @@ export const api = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { error } = await supabase.from('posts').insert({
-      owner_id: user.id,
-      content: '',
-      type: 'repost',
-      parent_id: postId
-    });
+    // Check if we already reposted this
+    const { data: existing } = await supabase
+      .from('posts')
+      .select('id')
+      .eq('owner_id', user.id)
+      .eq('parent_id', postId)
+      .eq('type', 'repost')
+      .is('deleted_at', null)
+      .single();
 
-    if (error) throw error;
+    if (existing) {
+      // Un-repost (soft delete)
+      await supabase
+        .from('posts')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', existing.id);
+    } else {
+      // Repost
+      const { error } = await supabase.from('posts').insert({
+        owner_id: user.id,
+        content: '',
+        type: 'repost',
+        parent_id: postId
+      });
+      if (error) throw error;
+    }
   },
 
   repost: async (postId: string): Promise<void> => {
@@ -450,7 +518,7 @@ export const api = {
       .select(`
         post:posts(
           *,
-          author:profiles(*),
+          author:profiles!posts_owner_id_fkey(*),
           media:post_media(*),
           reaction_counts:reaction_aggregates(*)
         )
@@ -472,7 +540,7 @@ export const api = {
       .from('conversations')
       .select(`
         *,
-        participants:conversation_participants(user:profiles(*), last_read_at),
+        participants:conversation_participants(user:profiles!conversation_participants_user_id_fkey(*), last_read_at),
         unread:unread_conversations(unread_count)
       `)
       .eq('unread.user_id', user.id)
@@ -491,7 +559,7 @@ export const api = {
     const [conv, msgs] = await Promise.all([
       supabase
         .from('conversations')
-        .select(`*, participants:conversation_participants(user:profiles(*))`)
+        .select(`*, participants:conversation_participants(user:profiles!conversation_participants_user_id_fkey(*))`)
         .eq('id', conversationId)
         .single(),
       api.getMessages(conversationId)
@@ -514,7 +582,7 @@ export const api = {
     const [messagesRes, participantRes] = await Promise.all([
       supabase
         .from('messages')
-        .select(`*, sender:profiles(*), reactions:message_reactions(*)`)
+        .select(`*, sender:profiles!messages_sender_id_fkey(*), reactions:message_reactions(*)`)
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true }),
       supabase
@@ -549,7 +617,7 @@ export const api = {
       conversation_id: conversationId,
       sender_id: (await supabase.auth.getUser()).data.user!.id,
       content: text
-    }).select('*, sender:profiles(*)').single();
+    }).select('*, sender:profiles!messages_sender_id_fkey(*)').single();
     if (error) throw error;
     return data as any;
   },
@@ -715,19 +783,21 @@ export const api = {
 
     const { data, error } = await query.single();
     if (error) return null;
-    return data as User;
+    return mapProfile(data);
   },
 
   getProfile: async (userId: string): Promise<UserProfile> => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (error) throw error;
 
+    const user = mapProfile(data);
+
     return {
-      ...data,
-      followersCount: 0,
-      followingCount: 0,
-      postCount: 0,
-      joinedDate: data.created_at
+      ...user,
+      followers_count: 0,
+      following_count: 0,
+      post_count: 0,
+      joined_date: data.created_at
     } as UserProfile;
   },
 
@@ -736,7 +806,7 @@ export const api = {
       .from('posts')
       .select(`
         *,
-        author:profiles(*),
+        author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
         reaction_counts:reaction_aggregates(*)
       `)
@@ -753,7 +823,7 @@ export const api = {
       .from('posts')
       .select(`
         *,
-        author:profiles(*),
+        author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
         reaction_counts:reaction_aggregates(*)
       `)
@@ -770,7 +840,7 @@ export const api = {
       .from('posts')
       .select(`
         *,
-        author:profiles(*),
+        author:profiles!posts_owner_id_fkey(*),
         media:post_media!inner(*),
         reaction_counts:reaction_aggregates(*)
       `)
@@ -787,7 +857,7 @@ export const api = {
       .select(`
         post:posts(
           *,
-          author:profiles(*),
+          author:profiles!posts_owner_id_fkey(*),
           media:post_media(*),
           reaction_counts:reaction_aggregates(*)
         )
@@ -805,7 +875,7 @@ export const api = {
       .select(`
         post:posts(
           *,
-          author:profiles(*),
+          author:profiles!posts_owner_id_fkey(*),
           media:post_media(*),
           reaction_counts:reaction_aggregates(*)
         )
@@ -1176,7 +1246,7 @@ export const api = {
       .from('posts')
       .select(`
         *,
-        author:profiles(*),
+        author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
         reaction_counts:reaction_aggregates(*)
       `)
@@ -1218,7 +1288,7 @@ export const api = {
       .from('posts')
       .select(`
         *,
-        author:profiles(*),
+        author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
         reaction_counts:reaction_aggregates(*)
       `)

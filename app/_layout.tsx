@@ -40,31 +40,11 @@ function RootLayoutNav() {
     );
   }
 
-  // Redirect based on auth state - render only auth routes
-  if (!isAuthenticated) {
-    return (
-      <RealtimeProvider>
-        <SafeAreaProvider>
-          <Stack
-            screenOptions={{
-              headerStyle: {
-                backgroundColor: theme.background,
-              },
-              headerTintColor: theme.textPrimary,
-            }}
-          >
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          </Stack>
-        </SafeAreaProvider>
-      </RealtimeProvider>
-    );
-  }
-
   return (
     <AuthProvider>
       <RealtimeProvider>
         <SafeAreaProvider>
-          <ResponsiveLayout>
+          {!isAuthenticated ? (
             <Stack
               screenOptions={{
                 headerStyle: {
@@ -73,32 +53,45 @@ function RootLayoutNav() {
                 headerTintColor: theme.textPrimary,
               }}
             >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="(profile)" options={{ headerShown: false }} />
-              <Stack.Screen name="(settings)" options={{ headerShown: false }} />
-              <Stack.Screen name="(modals)/new-message" options={{ headerShown: false }} />
-              <Stack.Screen name="(modals)/new-dm" options={{ headerShown: false }} />
-              <Stack.Screen name="(modals)/create-group" options={{ headerShown: false }} />
-              <Stack.Screen name="(modals)/create-channel" options={{ headerShown: false }} />
-              <Stack.Screen name="(modals)/poll" options={{ headerShown: false, presentation: 'modal' }} />
-              <Stack.Screen name="(modals)/quote" options={{ headerShown: false, presentation: 'modal' }} />
-              <Stack.Screen name="conversation/[id]/index" options={{ headerShown: false }} />
-              <Stack.Screen name="conversation/[id]/info" options={{ headerShown: false }} />
-              <Stack.Screen name="explore/settings" options={{ headerShown: false }} />
-              <Stack.Screen name="notifications/settings" options={{ headerShown: false }} />
-              <Stack.Screen name="messages/settings" options={{ headerShown: false }} />
-              <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
-              <Stack.Screen name="post/[id]" options={{ title: 'Post' }} />
-              <Stack.Screen
-                name="(compose)/compose"
-                options={{
-                  headerShown: false,
-                  presentation: 'modal',
-                }}
-              />
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             </Stack>
-          </ResponsiveLayout>
+          ) : (
+            <ResponsiveLayout>
+              <Stack
+                screenOptions={{
+                  headerStyle: {
+                    backgroundColor: theme.background,
+                  },
+                  headerTintColor: theme.textPrimary,
+                }}
+              >
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="(profile)" options={{ headerShown: false }} />
+                <Stack.Screen name="(settings)" options={{ headerShown: false }} />
+                <Stack.Screen name="(modals)/new-message" options={{ headerShown: false }} />
+                <Stack.Screen name="(modals)/new-dm" options={{ headerShown: false }} />
+                <Stack.Screen name="(modals)/create-group" options={{ headerShown: false }} />
+                <Stack.Screen name="(modals)/create-channel" options={{ headerShown: false }} />
+                <Stack.Screen name="(modals)/poll" options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen name="(modals)/quote" options={{ headerShown: false, presentation: 'modal' }} />
+                <Stack.Screen name="conversation/[id]/index" options={{ headerShown: false }} />
+                <Stack.Screen name="conversation/[id]/info" options={{ headerShown: false }} />
+                <Stack.Screen name="explore/settings" options={{ headerShown: false }} />
+                <Stack.Screen name="notifications/settings" options={{ headerShown: false }} />
+                <Stack.Screen name="messages/settings" options={{ headerShown: false }} />
+                <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
+                <Stack.Screen name="post/[id]" options={{ title: 'Post' }} />
+                <Stack.Screen
+                  name="(compose)/compose"
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              </Stack>
+            </ResponsiveLayout>
+          )}
         </SafeAreaProvider>
       </RealtimeProvider>
     </AuthProvider>

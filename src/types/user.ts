@@ -13,6 +13,12 @@ export type User = {
     is_shadow_banned: boolean;
     is_suspended: boolean;
     is_muted: boolean;
+    is_verified: boolean;
+    verification_type?: 'politician' | 'political_party' | 'government_agency' | 'civic_org' | 'journalist' | 'brand';
+    official_logo?: string;
+    username_status?: 'active' | 'reserved' | 'archived' | 'released';
+    authority_start?: string;
+    authority_end?: string;
     last_username_change_at?: string;
     country?: string;
 };
@@ -20,6 +26,8 @@ export type User = {
 export type UserProfile = User & {
     followers_count: number;
     following_count: number;
+    post_count: number;
+    joined_date: string;
 };
 
 export type Session = {

@@ -3,7 +3,7 @@
 -- Migration: 20231227000008_user_sessions.sql
 
 create table public.user_sessions (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     user_id uuid references public.profiles(id) on delete cascade not null,
     device text not null,
     location text,

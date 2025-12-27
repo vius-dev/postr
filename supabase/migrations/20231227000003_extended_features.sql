@@ -4,7 +4,7 @@
 
 -- 1. LISTS MODULE
 create table public.lists (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     owner_id uuid references public.profiles(id) on delete cascade not null,
     name text not null,
     description text,
@@ -77,7 +77,7 @@ create policy "Users can only see/manage own settings"
 
 -- 4. REPORTS (Moderation)
 create table public.reports (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     reporter_id uuid references public.profiles(id) on delete set null,
     target_id uuid not null, -- Polymorphic reference
     target_type text check (target_type in ('POST', 'USER', 'LIST', 'COMMENT')) not null,

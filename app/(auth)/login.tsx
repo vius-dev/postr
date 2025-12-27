@@ -2,6 +2,7 @@ import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,20 +10,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const router = useRouter();
   const { theme } = useTheme();
 
   const handleLogin = async () => {
-    console.log('Login attempt with:', email);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    console.log('Login response:', { data, error });
-    if (error) {
-      alert(error.message);
-    } else {
-      console.log('Login successful!', data);
+    if (!email || !password || isLoggingIn) return;
+
+    setIsLoggingIn(true);
+    try {
+      await api.login(email, password);
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      alert(error.message || 'Failed to login');
+      console.error('Login error:', error);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -69,9 +72,12 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               onPress={handleLogin}
-              style={[styles.loginButton, { backgroundColor: theme.primary }]}
+              style={[styles.loginButton, { backgroundColor: theme.primary, opacity: isLoggingIn ? 0.7 : 1 }]}
+              disabled={isLoggingIn}
             >
-              <Text style={[styles.loginButtonText, { color: theme.textInverse }]}>Log in</Text>
+              <Text style={[styles.loginButtonText, { color: theme.textInverse }]}>
+                {isLoggingIn ? 'Logging in...' : 'Log in'}
+              </Text>
             </TouchableOpacity>
 
             <View style={styles.footerLinks}>

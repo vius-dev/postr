@@ -8,6 +8,7 @@ import { User } from '@/types/user';
 import { Post } from '@/types/post';
 import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@/providers/AuthProvider';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileBio from '@/components/profile/ProfileBio';
 import ProfileStats from '@/components/profile/ProfileStats';
@@ -16,53 +17,9 @@ import ProfileTabs, { ProfileTab } from '@/components/profile/ProfileTabs';
 import PostCard from '@/components/PostCard';
 import { eventEmitter } from '@/lib/EventEmitter';
 
-const currentUserId = '0';
-
-const mockPosts: Post[] = [
-  {
-    id: '1',
-    content: 'This is the first post!',
-    createdAt: '1h',
-    author: {
-      id: '0',
-      name: 'Dev Team',
-      username: 'devteam',
-      avatar: 'https://i.pravatar.cc/150?u=devteam',
-      is_suspended: false,
-      is_shadow_banned: false,
-      is_limited: false,
-    },
-    likeCount: 0,
-    dislikeCount: 0,
-    laughCount: 0,
-    repostCount: 0,
-    commentCount: 0,
-    userReaction: 'NONE',
-  },
-  {
-    id: '2',
-    content: 'This is the second post, with an image!',
-    media: [{ type: 'image', url: 'https://i.pravatar.cc/1000?u=a' }],
-    createdAt: '2h',
-    author: {
-      id: '0',
-      name: 'Dev Team',
-      username: 'devteam',
-      avatar: 'https://i.pravatar.cc/150?u=devteam',
-      is_suspended: false,
-      is_shadow_banned: false,
-      is_limited: false,
-    },
-    likeCount: 0,
-    dislikeCount: 0,
-    laughCount: 0,
-    repostCount: 0,
-    commentCount: 0,
-    userReaction: 'NONE',
-  },
-];
 
 export default function UserProfileScreen() {
+  const { user: currentUser } = useAuth();
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [relationship, setRelationship] = useState<ViewerRelationship | null>(null);
@@ -84,7 +41,9 @@ export default function UserProfileScreen() {
     const fetchUser = async () => {
       setLoading(true);
       try {
-        const usernameToFetch = (paramUsername as string) || 'devteam';
+        const usernameToFetch = (paramUsername as string) || currentUser?.id;
+        if (!usernameToFetch) return;
+
         const fetchedUser = await api.fetchUser(usernameToFetch);
         if (fetchedUser) {
           setUser(fetchedUser);
@@ -192,7 +151,7 @@ export default function UserProfileScreen() {
   }, []);
 
   const handleFollow = async () => {
-    if (!user) return;
+    if (!user || isFollowingLoading) return;
     setIsFollowingLoading(true);
     try {
       await api.followUser(user.id);
@@ -200,8 +159,10 @@ export default function UserProfileScreen() {
       setRelationship(newRel);
 
       // Refresh following list to show the newly followed user
-      const updatedFollowing = await api.getFollowing('0'); // Current user ID is '0'
-      setFollowing(updatedFollowing);
+      if (currentUser) {
+        const updatedFollowing = await api.getFollowing(currentUser.id);
+        setFollowing(updatedFollowing);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to follow user';
 
@@ -227,7 +188,7 @@ export default function UserProfileScreen() {
 
 
   const handleUnfollow = async () => {
-    if (!user) return;
+    if (!user || isFollowingLoading) return;
     setIsFollowingLoading(true);
     try {
       await api.unfollowUser(user.id);
@@ -235,8 +196,10 @@ export default function UserProfileScreen() {
       setRelationship(newRel);
 
       // Refresh following list to remove the unfollowed user
-      const updatedFollowing = await api.getFollowing('0'); // Current user ID is '0'
-      setFollowing(updatedFollowing);
+      if (currentUser) {
+        const updatedFollowing = await api.getFollowing(currentUser.id);
+        setFollowing(updatedFollowing);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to unfollow user';
 
@@ -292,7 +255,7 @@ export default function UserProfileScreen() {
       />}
       <ProfileTabs
         selectedTab={selectedTab}
-        isOwner={user?.id === '0'}
+        isOwner={user?.id === currentUser?.id}
         onSelectTab={(tab) => {
           if (tab === 'Shop') {
             router.push('/(tabs)/shop');

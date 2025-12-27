@@ -13,9 +13,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { session } = useAuthStore();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { session, user: initialUser } = useAuthStore();
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [loading, setLoading] = useState(!initialUser);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -27,18 +27,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // Auto-provision profile if needed (Simulate Supabase Trigger)
           await api.ensureProfileExists(session.user);
 
-          // Determine if we should map to the Dev Team user
-          // For now, we'll map a specific dev email or just the '0' ID fallback
-          const isDevEmail = session.user.email?.toLowerCase().includes('devteam') ||
-            session.user.email?.toLowerCase().includes('handi');
-
-          const effectiveId = isDevEmail ? '0' : userId;
-
-          // Sync with API
-          api.setSessionUser(effectiveId);
-
-          // Attempt to fetch user
-          let res = await api.fetchUser(effectiveId);
+          // Fetch real user profile from Supabase
+          const res = await api.fetchUser(userId);
 
           setUser(res || null);
         } catch (error) {

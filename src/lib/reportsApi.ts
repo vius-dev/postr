@@ -1,9 +1,10 @@
 
+import { supabase } from './supabase';
 import { Report, ReportableEntityType, ReportType } from '@/types/reports';
 
-const mockReports: Report[] = [];
-
-// A mock function to simulate creating a report
+/**
+ * Creates a report in the Supabase database.
+ */
 export const createReport = async (
   entityType: ReportableEntityType,
   entityId: string,
@@ -11,18 +12,29 @@ export const createReport = async (
   reporterId: string,
   reason?: string
 ): Promise<Report> => {
-  const newReport: Report = {
-    id: `report-${Date.now()}`,
-    entityType,
-    entityId,
-    reportType,
-    reporterId,
-    createdAt: new Date().toISOString(),
-    reason,
-  };
+  const { data, error } = await supabase
+    .from('reports')
+    .insert({
+      reporter_id: reporterId,
+      target_id: entityId,
+      target_type: entityType,
+      report_type: reportType,
+      reason: reason,
+      status: 'OPEN'
+    })
+    .select()
+    .single();
 
-  mockReports.push(newReport);
-  console.log('New report created:', newReport);
+  if (error) throw error;
 
-  return newReport;
+  return {
+    id: data.id,
+    entityType: data.target_type as ReportableEntityType,
+    entityId: data.target_id,
+    reportType: data.report_type as ReportType,
+    reporterId: data.reporter_id,
+    createdAt: data.created_at,
+    reason: data.reason,
+    status: data.status
+  } as Report;
 };

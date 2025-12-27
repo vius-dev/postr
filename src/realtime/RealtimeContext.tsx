@@ -115,14 +115,14 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const toggleReaction = useCallback(async (postId: string, action: ReactionAction) => {
+    let nextReaction: ReactionAction = 'NONE';
     let rollback:
       | { reaction: ReactionAction; counts: PostCounts }
       | null = null;
 
     setState(prev => {
       const currentReaction = prev.userReactions[postId] || 'NONE';
-      const nextReaction =
-        currentReaction === action ? 'NONE' : action;
+      nextReaction = currentReaction === action ? 'NONE' : action;
 
       const currentCounts = prev.counts[postId] || {
         ...DEFAULT_COUNTS,
@@ -157,7 +157,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     try {
-      await api.react(postId, action);
+      await api.react(postId, nextReaction);
     } catch (error) {
       if (rollback) {
         setState(prev => ({
@@ -177,13 +177,14 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const toggleRepost = useCallback(async (postId: string) => {
+    let next = false;
     let rollback:
       | { reposted: boolean; counts: PostCounts }
       | null = null;
 
     setState(prev => {
       const current = prev.userReposts[postId] || false;
-      const next = !current;
+      next = !current;
 
       const currentCounts = prev.counts[postId] || {
         ...DEFAULT_COUNTS,

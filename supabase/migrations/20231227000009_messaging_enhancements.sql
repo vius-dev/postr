@@ -7,7 +7,7 @@ add column pinned_message_id uuid references public.messages(id) on delete set n
 
 -- 2. MESSAGE REACTIONS
 create table public.message_reactions (
-    id uuid default uuid_generate_v4() primary key,
+    id uuid default gen_random_uuid() primary key,
     message_id uuid references public.messages(id) on delete cascade not null,
     user_id uuid references public.profiles(id) on delete cascade not null,
     emoji text not null,
