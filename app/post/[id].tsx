@@ -27,7 +27,7 @@ const PostDetailScreen = () => {
   useEffect(() => {
     if (id && typeof id === 'string') {
       setIsLoading(true);
-      api.fetchPostWithLineage(id).then((res: { post: Post, parents: Post[] } | undefined) => {
+      api.getPostWithLineage(id).then((res: { post: Post, parents: Post[] } | null) => {
         if (res) {
           const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
           const focalPost: ListItem = { ...res.post, itemType: 'focal' };
@@ -44,56 +44,38 @@ const PostDetailScreen = () => {
       });
     }
 
-    const handleNewComment = ({ parentId, comment }: { parentId: string, comment: Comment }) => {
-      // If the new comment is a reply to the focal post or one of its visible children
-      // For simplicity in the mock, we refresh the lineage if the parentId matches the focal post
-      // or if it's a child of the focal post.
-      if (id && (parentId === id || listData.some(item => item.id === parentId))) {
-        // Optimistically add it if it's a direct reply to focal post
-        if (parentId === id) {
-          const newReply: ListItem = { ...comment, depth: 0, itemType: 'reply' };
-          setListData(prev => {
-            const focalIndex = prev.findIndex(item => item.itemType === 'focal');
-            const nextListData = [...prev];
-            nextListData.splice(focalIndex + 1, 0, newReply);
-            return nextListData;
-          });
-        } else {
-          // If it's a nested reply, it's harder to place optimistically without more logic, 
-          // but we can at least refresh or append. For now, let's refresh.
-          api.fetchPostWithLineage(id as string).then((res: { post: Post, parents: Post[] } | undefined) => {
-            if (res) {
-              const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
-              const focalPost: ListItem = { ...res.post, itemType: 'focal' };
-              const replies = (res.post.comments || []).map((c: Comment) => ({
-                ...c,
-                depth: 0,
-                itemType: 'reply' as const,
-              }));
-              setListData([...parents, focalPost, ...replies]);
-            }
-          });
-        }
-      }
-    };
-
     const handlePostDeleted = (deletedPostId: string) => {
       if (deletedPostId === id) {
-        // router.back() might be called multiple times if we're not careful, 
-        // but here it's fine since the component will unmount.
         router.back();
       } else {
         setListData(prev => prev.filter(item => item.id !== deletedPostId));
       }
     };
 
-    eventEmitter.on('newComment', handleNewComment);
     eventEmitter.on('postDeleted', handlePostDeleted);
+
+    // Subscribe to real-time comments (direct replies only)
+    const subscription = api.subscribeToPostComments(id as string, (newComment) => {
+      // Realtime subscription only receives direct replies to this post (due to API filter)
+      const newReply: ListItem = { ...newComment, depth: 0, itemType: 'reply' };
+      setListData(prev => {
+        const focalIndex = prev.findIndex(item => item.itemType === 'focal');
+        if (focalIndex === -1) return prev; // Should not happen
+
+        // Avoid duplicates if we already have it (e.g. from optimistic update if we added one)
+        if (prev.some(p => p.id === newReply.id)) return prev;
+
+        const nextListData = [...prev];
+        nextListData.splice(focalIndex + 1, 0, newReply);
+        return nextListData;
+      });
+    });
+
     return () => {
-      eventEmitter.off('newComment', handleNewComment);
       eventEmitter.off('postDeleted', handlePostDeleted);
+      subscription.unsubscribe();
     };
-  }, [id, listData.length, router]); // listData.length to ensure we have the current state in the listener closure
+  }, [id, router]);
 
   const renderItem = ({ item }: { item: ListItem }) => {
     switch (item.itemType) {

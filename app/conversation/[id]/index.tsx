@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, FlatList, ActivityIndicator, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme/theme';
-import { api, CURRENT_USER_ID } from '@/lib/api';
+import { api } from '@/lib/api';
 import { Conversation, Message } from '@/types/message';
 import MessageBubble from '@/components/MessageBubble';
 import MessageInput from '@/components/MessageInput';
@@ -11,10 +11,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ConversationHeader from '@/components/ConversationHeader';
 import { eventEmitter } from '@/lib/EventEmitter';
 import PinnedMessageBanner from '@/components/PinnedMessageBanner';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function ConversationScreen() {
     const { theme } = useTheme();
     const { id: conversationId } = useLocalSearchParams();
+    const { user: currentUser } = useAuth();
 
     const [conversation, setConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -146,7 +148,7 @@ export default function ConversationScreen() {
                     renderItem={({ item }) => (
                         <MessageBubble
                             message={item}
-                            isMe={item.senderId === CURRENT_USER_ID}
+                            isMe={item.senderId === currentUser?.id}
                             conversation={conversation}
                             onReaction={handleReaction}
                             onPinMessage={handlePinMessage}

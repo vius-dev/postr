@@ -10,6 +10,9 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { ResponsiveLayout } from '@/components/layout/ResponsiveLayout';
 import { useLoadAssets } from '@/hooks/useLoadAssets';
+import { initDatabase } from '@/lib/db/sqlite';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
+import { registerBackgroundFetchAsync } from '@/lib/sync/BackgroundFetch';
 
 function RootLayoutNav() {
   const { theme } = useTheme();
@@ -23,6 +26,17 @@ function RootLayoutNav() {
 
   useEffect(() => {
     realtimeCoordinator.initialize();
+
+    const initOffline = async () => {
+      try {
+        await initDatabase();
+        await SyncEngine.init();
+        registerBackgroundFetchAsync().catch(console.error);
+      } catch (e) {
+        console.error('Failed to initialize offline system', e);
+      }
+    };
+    initOffline();
 
     return () => {
       realtimeCoordinator.shutdown();

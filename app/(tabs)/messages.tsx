@@ -9,7 +9,7 @@ import ConversationItem from '@/components/ConversationItem';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CURRENT_USER_ID } from '@/lib/api';
+import { useAuth } from '@/providers/AuthProvider';
 import { useResponsive } from '@/hooks/useResponsive';
 import { eventEmitter } from '@/lib/EventEmitter';
 import { useMessagesSettings, useNotificationsSettings } from '@/state/communicationSettings';
@@ -18,6 +18,7 @@ type FilterType = 'All' | 'DMs' | 'Groups' | 'Channels' | 'Unread';
 
 export default function MessagesScreen() {
   const { theme } = useTheme();
+  const { user: currentUser } = useAuth();
   const { showSidebar } = useResponsive();
   const router = useRouter();
   const { allowMessageRequests, filterLowQuality } = useMessagesSettings();
@@ -71,7 +72,7 @@ export default function MessagesScreen() {
       }
 
       if (conv.type === 'DM' && !allowMessageRequests) {
-        const otherParticipant = conv.participants.find(p => p.id !== CURRENT_USER_ID);
+        const otherParticipant = conv.participants.find(p => p.id !== currentUser?.id);
         if (otherParticipant && !followingIds.has(otherParticipant.id)) {
           return false;
         }
@@ -86,7 +87,7 @@ export default function MessagesScreen() {
       let matchesSearch = true;
       if (query) {
         if (conv.type === 'DM') {
-          const otherUser = conv.participants.find(p => p.id !== CURRENT_USER_ID) || conv.participants[0];
+          const otherUser = conv.participants.find(p => p.id !== currentUser?.id) || conv.participants[0];
           matchesSearch = otherUser.name.toLowerCase().includes(query) ||
             otherUser.username.toLowerCase().includes(query);
         } else {

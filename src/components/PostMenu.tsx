@@ -3,10 +3,13 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable, Alert, Shar
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '@/types/post';
 import { api } from '@/lib/api';
-import ReportModal from './modals/ReportModal';
-import { ReportType } from '@/types/reports';
-import { useTheme } from '@/theme/theme';
 import { useAuthStore } from '@/state/auth';
+import { useTheme } from '@/theme/theme';
+import { eventEmitter } from '@/lib/EventEmitter';
+import ReportModal from '@/components/modals/ReportModal';
+import { ReportType } from '@/types/reports';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
+import { getDb } from '@/lib/db/sqlite';
 
 interface PostMenuProps {
   visible: boolean;
@@ -27,9 +30,15 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
   useEffect(() => {
     if (visible) {
       const checkStatus = async () => {
-        const bookmarked = await api.isBookmarked(post.id);
-        const rel = await api.fetchUserRelationship(post.author.id);
-        setIsBookmarked(bookmarked);
+        // Load bookmark status from local DB
+        const db = await getDb();
+        const bookmark = await db.getFirstAsync(
+          'SELECT * FROM bookmarks WHERE post_id = ?',
+          [post.id]
+        );
+        setIsBookmarked(!!bookmark);
+
+        const rel = await api.getUserRelationship(post.author.id);
         setIsFollowing(rel.type === 'FOLLOWING');
         setIsMuted(rel.type === 'MUTED');
         setIsBlocked(rel.type === 'BLOCKED');
@@ -42,9 +51,9 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      const status = await api.toggleBookmark(post.id);
-      setIsBookmarked(status);
-      Alert.alert(status ? 'Added to Bookmarks' : 'Removed from Bookmarks');
+      await SyncEngine.toggleBookmark(post.id);
+      setIsBookmarked(!isBookmarked);
+      Alert.alert(!isBookmarked ? 'Added to Bookmarks' : 'Removed from Bookmarks');
     } catch (error) {
       Alert.alert('Error', 'Could not update bookmark.');
     } finally {
@@ -70,14 +79,12 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      if (isFollowing) {
-        await api.unfollowUser(post.author.id);
-        setIsFollowing(false);
-        Alert.alert('Unfollowed', `You unfollowed @${post.author.username}`);
-      } else {
-        await api.followUser(post.author.id);
-        setIsFollowing(true);
+      const isNowFollowing = await api.toggleFollow(post.author.id);
+      setIsFollowing(isNowFollowing);
+      if (isNowFollowing) {
         Alert.alert('Followed', `You are now following @${post.author.username}`);
+      } else {
+        Alert.alert('Unfollowed', `You unfollowed @${post.author.username}`);
       }
     } catch (error) {
       Alert.alert('Error', 'Could not update follow status.');
@@ -161,6 +168,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
           onPress: async () => {
             try {
               await api.deletePost(post.id);
+              eventEmitter.emit('postDeleted', post.id);
               onClose();
             } catch (error) {
               Alert.alert('Error', 'Could not delete post.');

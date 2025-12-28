@@ -29,21 +29,12 @@ export default function ExploreScreen() {
     const fetchTrends = async () => {
       setLoadingTrends(true);
       try {
-        // In a real app, we'd pass these settings to the API
-        // Fetch more trends initially to allow expanding
-        const trendingData = await api.getTrends(20);
+        const trendingData = await api.getTrending(20);
 
-        if (!trendingData) {
-          setTrends([]);
-          return;
-        }
-
-        // For personalizing, we might shuffle or filter if this was a real backend
-        // Here we just simulate it by slightly changing the order or count
-        if (!personalizeTrends) {
-          setTrends(trendingData.slice().reverse()); // Just to show a difference
-        } else {
+        if (trendingData) {
           setTrends(trendingData);
+        } else {
+          setTrends([]);
         }
       } catch (error) {
         console.error('Error fetching trends:', error);

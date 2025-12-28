@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { Post, ReactionAction } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import { useRealtime } from '@/realtime/RealtimeContext';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
 import Card from '@/components/Card'; // Import the new Card component
 import { timeAgo } from '@/utils/time'; // Import a time formatting utility
 import MediaGrid from '@/components/MediaGrid';
@@ -36,9 +37,9 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
     counts,
     userReactions,
     userReposts,
-    initializePost,
-    toggleReaction,
-    toggleRepost
+    // initializePost, // No longer needed
+    // toggleReaction, // Replaced by SyncEngine
+    // toggleRepost // Replaced by SyncEngine
   } = useRealtime();
 
   const [isRepostModalVisible, setRepostModalVisible] = useState(false);
@@ -47,6 +48,8 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   // Initialize post state in context
+  // Initialize post state in context - No longer needed for Offline First
+  /*
   useEffect(() => {
     initializePost(post.id, {
       likes: post.likeCount,
@@ -59,6 +62,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
       isBookmarked: post.isBookmarked || false,
     });
   }, [post.id]);
+  */
 
   const reaction = userReactions[post.id] || post.userReaction;
   const isReposted = userReposts[post.id] ?? post.isReposted;
@@ -77,7 +81,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
 
   const handleReaction = async (action: ReactionAction) => {
     try {
-      await toggleReaction(post.id, action);
+      await SyncEngine.toggleReaction(post.id, action as 'LIKE' | 'REPOST');
     } catch (error) {
       console.error('Failed to react', error);
     }
@@ -86,7 +90,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   const handleRepost = async () => {
     setRepostModalVisible(false);
     try {
-      await toggleRepost(post.id);
+      await SyncEngine.toggleReaction(post.id, 'REPOST');
     } catch (error) {
       console.error('Failed to repost', error);
     }

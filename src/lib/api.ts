@@ -5,6 +5,16 @@ import { Notification } from "@/types/notification";
 import { Conversation, Message } from "@/types/message";
 import { ViewerRelationship } from "@/components/profile/ProfileActionRow";
 
+// CONSTANTS
+// -------------------------------------------------------------------------
+const DEFAULT_PAGE_SIZE = 20;
+const SEARCH_LIMIT = 20;
+const MAX_CONTENT_LENGTH = 5000;
+const MAX_MEDIA_COUNT = 4;
+const MAX_POLL_CHOICES = 4;
+const MAX_BIO_LENGTH = 160;
+const MAX_NAME_LENGTH = 50;
+const INVITE_TOKEN_EXPIRY_HOURS = 24;
 
 export interface PrivacySettings {
   protectPosts: boolean;
@@ -16,17 +26,59 @@ export interface PrivacySettings {
 
 export interface NotificationSettings {
   qualityFilter: boolean;
+  mentionsOnly: boolean;
   pushMentions: boolean;
   pushReplies: boolean;
   pushLikes: boolean;
   emailDigest: boolean;
 }
 
+// VALIDATION HELPERS
+// -------------------------------------------------------------------------
+const validateContent = (content: string, maxLength = MAX_CONTENT_LENGTH): void => {
+  if (!content || content.trim().length === 0) {
+    throw new Error('Content cannot be empty');
+  }
+  if (content.length > maxLength) {
+    throw new Error(`Content exceeds maximum length of ${maxLength} characters`);
+  }
+};
 
-/**
- * Maps a raw database row from the 'posts' table (with joined profiles and aggregates)
- * to the strict Post type.
- */
+const validateMedia = (media?: Media[]): void => {
+  if (media && media.length > MAX_MEDIA_COUNT) {
+    throw new Error(`Cannot upload more than ${MAX_MEDIA_COUNT} media items`);
+  }
+};
+
+const validatePollChoices = (choices: any[]): void => {
+  if (choices.length < 2) {
+    throw new Error('Poll must have at least 2 choices');
+  }
+  if (choices.length > MAX_POLL_CHOICES) {
+    throw new Error(`Poll cannot have more than ${MAX_POLL_CHOICES} choices`);
+  }
+};
+
+const getAuthenticatedUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  return user;
+};
+
+// CRYPTO HELPER FOR SECURE TOKENS
+// -------------------------------------------------------------------------
+const generateSecureToken = (): string => {
+  if (typeof window !== 'undefined' && window.crypto) {
+    const array = new Uint8Array(32);
+    window.crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+  // Fallback for non-browser environments if any (using Math.random for MVP if crypto is missing)
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
+
+// MAPPING FUNCTIONS
+// -------------------------------------------------------------------------
 const mapPost = (row: any): Post => {
   return {
     id: row.id,
@@ -40,18 +92,15 @@ const mapPost = (row: any): Post => {
     laughCount: row.reaction_counts?.laugh_count || 0,
     repostCount: row.reaction_counts?.repost_count || 0,
     commentCount: row.reaction_counts?.comment_count || 0,
-    userReaction: 'NONE', // Filled by hydratePosts
-    isBookmarked: false, // Filled by hydratePosts
+    userReaction: 'NONE',
+    isBookmarked: false,
     parentPostId: row.parent_id,
     poll: row.poll
   } as Post;
 };
 
-/**
- * Maps a raw database row from the 'profiles' table to the strict User type.
- */
-const mapProfile = (row: any): User => {
-  if (!row) return null as any;
+const mapProfile = (row: any): User | null => {
+  if (!row) return null;
   return {
     id: row.id,
     name: row.name,
@@ -77,39 +126,41 @@ const mapProfile = (row: any): User => {
   };
 };
 
-/**
- * Batch hydrates posts with current-user-specific status (reactions, bookmarks).
- */
 const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
   if (posts.length === 0) return posts;
+
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user;
   if (!user) return posts;
 
   const postIds = posts.map(p => p.id);
 
-  // Parallel fetch reactions and bookmarks
-  const [reactions, bookmarks] = await Promise.all([
-    supabase
-      .from('post_reactions')
-      .select('subject_id, type')
-      .eq('actor_id', user.id)
-      .in('subject_id', postIds),
-    supabase
-      .from('bookmarks')
-      .select('post_id')
-      .eq('user_id', user.id)
-      .in('post_id', postIds)
-  ]);
+  try {
+    const [reactions, bookmarks] = await Promise.all([
+      supabase
+        .from('post_reactions')
+        .select('subject_id, type')
+        .eq('actor_id', user.id)
+        .in('subject_id', postIds),
+      supabase
+        .from('bookmarks')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .in('post_id', postIds)
+    ]);
 
-  const reactionMap = new Map(reactions.data?.map((r: any) => [r.subject_id, r.type]));
-  const bookmarkSet = new Set(bookmarks.data?.map((b: any) => b.post_id));
+    const reactionMap = new Map(reactions.data?.map((r: any) => [r.subject_id, r.type]) || []);
+    const bookmarkSet = new Set(bookmarks.data?.map((b: any) => b.post_id) || []);
 
-  return posts.map(p => ({
-    ...p,
-    userReaction: (reactionMap.get(p.id) as ReactionAction) || 'NONE',
-    isBookmarked: bookmarkSet.has(p.id)
-  }));
+    return posts.map(p => ({
+      ...p,
+      userReaction: (reactionMap.get(p.id) as ReactionAction) || 'NONE',
+      isBookmarked: bookmarkSet.has(p.id)
+    }));
+  } catch (error) {
+    console.error('Error hydrating posts:', error);
+    return posts;
+  }
 };
 
 export const api = {
@@ -119,22 +170,16 @@ export const api = {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
-    // Retry fetching profile briefly in case trigger is slow
-    let profile = null;
-    for (let i = 0; i < 3; i++) {
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-      if (p) {
-        profile = p;
-        break;
-      }
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+    await api.ensureProfileExists(data.user);
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
 
     if (!profile) {
-      // Emergency fall-through if trigger failed
-      await api.ensureProfileExists(data.user);
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
-      profile = p;
+      throw new Error('Failed to create user profile');
     }
 
     await supabase.from('user_sessions').insert({
@@ -144,13 +189,23 @@ export const api = {
       is_current: true
     });
 
+    const mappedProfile = mapProfile(profile);
+    if (!mappedProfile) throw new Error('Invalid profile data');
+
     return {
-      user: mapProfile(profile),
+      user: mappedProfile,
       session: data.session
     };
   },
 
   register: async (email: string, password: string, username: string, name: string): Promise<{ user: User; session: any }> => {
+    if (username.length < 3) {
+      throw new Error('Username must be at least 3 characters');
+    }
+    if (name.length > MAX_NAME_LENGTH) {
+      throw new Error(`Name cannot exceed ${MAX_NAME_LENGTH} characters`);
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -160,8 +215,6 @@ export const api = {
     });
     if (error) throw error;
 
-    // We don't map profile here because it's handled by the trigger 
-    // and navigation usually waits for session update which triggers hydrate in AuthProvider
     return { user: data.user as any, session: data.session };
   },
 
@@ -170,6 +223,9 @@ export const api = {
   },
 
   updatePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    if (newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters');
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
   },
@@ -177,8 +233,14 @@ export const api = {
   getCurrentUser: async (): Promise<User | null> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    return { ...user, ...profile } as unknown as User;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    return mapProfile(profile);
   },
 
   ensureProfileExists: async (authUser: any): Promise<void> => {
@@ -189,10 +251,13 @@ export const api = {
       .single();
 
     if (!profile) {
-      let username = authUser.user_metadata?.username || authUser.email?.split('@')[0] || `user_${authUser.id.split('-')[0]}`;
+      let username = authUser.user_metadata?.username ||
+        authUser.email?.split('@')[0] ||
+        `user_${authUser.id.split('-')[0]}`;
 
-      // Ensure length
-      if (username.length < 3) username = username + '_' + Math.floor(Math.random() * 100);
+      if (username.length < 3) {
+        username = username + '_' + Math.floor(Math.random() * 100);
+      }
 
       const { error } = await supabase.from('profiles').insert({
         id: authUser.id,
@@ -200,14 +265,16 @@ export const api = {
         name: authUser.user_metadata?.name || username,
         avatar: authUser.user_metadata?.avatar || `https://i.pravatar.cc/150?u=${authUser.id}`
       });
-      if (error) console.error('Error creating profile manually:', error);
+
+      if (error) {
+        console.error('Error creating profile:', error);
+        throw new Error('Failed to create user profile');
+      }
     }
   },
 
-
   getSessions: async (): Promise<Session[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    const user = await getAuthenticatedUser();
 
     const { data, error } = await supabase
       .from('user_sessions')
@@ -216,6 +283,7 @@ export const api = {
       .order('last_active', { ascending: false });
 
     if (error) throw error;
+
     return data.map((s: any) => ({
       id: s.id,
       device: s.device,
@@ -235,18 +303,21 @@ export const api = {
 
   // POSTS (FEED)
   // -------------------------------------------------------------------------
-  getFeed: async (params: { limit?: number; cursor?: string } = {}): Promise<{ posts: Post[]; nextCursor?: string }> => {
-    // Simple global feed for MVP
+  getFeed: async (params: { limit?: number; cursor?: string } = {}): Promise<{ posts: Post[]; nextCursor?: string; hasMore: boolean }> => {
+    const limit = params.limit || DEFAULT_PAGE_SIZE;
+
     let query = supabase
       .from('posts')
       .select(`
-                *,
-                author:profiles!posts_owner_id_fkey(*),
-                media:post_media(*),
-                reaction_counts:reaction_aggregates(*)
-            `)
+        *,
+        author:profiles!posts_owner_id_fkey(*),
+        media:post_media(*),
+        reaction_counts:reaction_aggregates!subject_id(*)
+      `)
+      .is('deleted_at', null)
+      .is('parent_id', null)
       .order('created_at', { ascending: false })
-      .limit(params.limit || 20);
+      .limit(limit);
 
     if (params.cursor) {
       query = query.lt('created_at', params.cursor);
@@ -256,61 +327,97 @@ export const api = {
     if (error) throw error;
 
     const posts = await hydratePosts(data.map(mapPost));
+    const hasMore = posts.length === limit;
 
     return {
       posts,
-      nextCursor: posts.length > 0 ? posts[posts.length - 1].createdAt : undefined
+      nextCursor: hasMore && posts.length > 0 ? posts[posts.length - 1].createdAt : undefined,
+      hasMore
     };
   },
 
-  getForYouFeed: async (params: { limit?: number; cursor?: string } = {}): Promise<{ posts: Post[]; nextCursor?: string }> => {
+  getForYouFeed: async (params: { limit?: number; cursor?: string } = {}): Promise<{ posts: Post[]; nextCursor?: string; hasMore: boolean }> => {
     return api.getFeed(params);
   },
 
-  fetchFeed: async (params: { limit?: number; cursor?: string } | string = {}): Promise<{ posts: Post[]; nextCursor?: string }> => {
-    if (typeof params === 'string') {
-      return api.getFeed({ cursor: params });
-    }
-    return api.getFeed(params);
-  },
-
-  createPost: async (postData: { content: string; media?: { type: 'image' | 'video'; url: string }[]; quotedPostId?: string }): Promise<Post> => {
-    // 1. Insert Post
-    const { data: post, error } = await supabase.from('posts').insert({
-      content: postData.content,
-      quoted_post_id: postData.quotedPostId,
-      owner_id: (await supabase.auth.getUser()).data.user!.id
-    }).select().single();
+  getDeltaFeed: async (since: string): Promise<Post[]> => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        author:profiles!posts_owner_id_fkey(*),
+        media:post_media(*),
+        reaction_counts:reaction_aggregates!subject_id(*)
+      `)
+      .gt('updated_at', since)
+      .is('deleted_at', null)
+      .order('updated_at', { ascending: true });
 
     if (error) throw error;
 
-    // 2. Insert Media (if any)
+    return hydratePosts(data.map(mapPost));
+  },
+
+  createPost: async (postData: { content: string; media?: Media[]; quotedPostId?: string }): Promise<Post> => {
+    validateContent(postData.content);
+    validateMedia(postData.media);
+
+    const user = await getAuthenticatedUser();
+
+    const { data: post, error: postError } = await supabase
+      .from('posts')
+      .insert({
+        content: postData.content,
+        quoted_post_id: postData.quotedPostId,
+        owner_id: user.id
+      })
+      .select()
+      .single();
+
+    if (postError) throw postError;
+
     if (postData.media && postData.media.length > 0) {
       const mediaInserts = postData.media.map(m => ({
         post_id: post.id,
-        url: m.url, // Assumes URL is already uploaded/public or handled
+        url: m.url,
         type: m.type
       }));
-      await supabase.from('post_media').insert(mediaInserts);
+
+      const { error: mediaError } = await supabase
+        .from('post_media')
+        .insert(mediaInserts);
+
+      if (mediaError) {
+        await supabase
+          .from('posts')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', post.id);
+        throw new Error('Failed to upload media');
+      }
     }
 
-    // Return fully hydrated post
-    const hydrated = await api.fetchPost(post.id);
+    const hydrated = await api.getPost(post.id);
     if (!hydrated) throw new Error('Failed to fetch newly created post');
     return hydrated;
   },
 
-  createComment: async (postId: string, commentData: { content: string, media?: Media[] }): Promise<Comment> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+  createComment: async (postId: string, commentData: { content: string; media?: Media[] }): Promise<Comment> => {
+    validateContent(commentData.content);
+    validateMedia(commentData.media);
 
-    const { data: post, error } = await supabase.from('posts').insert({
-      content: commentData.content,
-      parent_id: postId,
-      owner_id: user.id
-    }).select().single();
+    const user = await getAuthenticatedUser();
 
-    if (error) throw error;
+    const { data: post, error: postError } = await supabase
+      .from('posts')
+      .insert({
+        content: commentData.content,
+        parent_id: postId,
+        owner_id: user.id
+      })
+      .select()
+      .single();
+
+    if (postError) throw postError;
 
     if (commentData.media && commentData.media.length > 0) {
       const mediaInserts = commentData.media.map(m => ({
@@ -318,10 +425,21 @@ export const api = {
         url: m.url,
         type: m.type
       }));
-      await supabase.from('post_media').insert(mediaInserts);
+
+      const { error: mediaError } = await supabase
+        .from('post_media')
+        .insert(mediaInserts);
+
+      if (mediaError) {
+        await supabase
+          .from('posts')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', post.id);
+        throw new Error('Failed to upload media');
+      }
     }
 
-    const hydrated = await api.fetchPost(post.id);
+    const hydrated = await api.getPost(post.id);
     if (!hydrated) throw new Error('Failed to fetch newly created comment');
     return hydrated as unknown as Comment;
   },
@@ -331,23 +449,27 @@ export const api = {
   },
 
   updatePost: async (postId: string, content: string): Promise<void> => {
+    validateContent(content);
+
     const { error } = await supabase
       .from('posts')
-      .update({ content })
-      .eq('id', postId); // RLS handles auth/time check
+      .update({ content, updated_at: new Date().toISOString() })
+      .eq('id', postId);
+
     if (error) throw error;
   },
 
-  fetchPost: async (postId: string): Promise<Post | null> => {
+  getPost: async (postId: string): Promise<Post | null> => {
     const { data, error } = await supabase
       .from('posts')
       .select(`
-                *,
-                author:profiles!posts_owner_id_fkey(*),
-                media:post_media(*),
-                reaction_counts:reaction_aggregates(*)
-            `)
+        *,
+        author:profiles!posts_owner_id_fkey(*),
+        media:post_media(*),
+        reaction_counts:reaction_aggregates!subject_id(*)
+      `)
       .eq('id', postId)
+      .is('deleted_at', null)
       .single();
 
     if (error || !data) return null;
@@ -356,21 +478,37 @@ export const api = {
     return hydrated[0] || null;
   },
 
-  fetchPostWithLineage: async (postId: string): Promise<{ post: Post, parents: Post[] } | undefined> => {
-    const post = await api.fetchPost(postId);
-    if (!post) return undefined;
+  getPostWithLineage: async (postId: string): Promise<{ post: Post; parents: Post[] } | null> => {
+    // Attempt optimizing with RPC if available, fallback to recursive fetch
+    try {
+      const { data, error } = await supabase.rpc('get_post_lineage', { post_id: postId });
+      if (!error && data && data.length > 0) {
+        const posts = await hydratePosts(data.map(mapPost));
+        const post = posts.find(p => p.id === postId);
+        const parents = posts.filter(p => p.id !== postId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        return post ? { post, parents } : null;
+      }
+    } catch (e) {
+      console.warn('RPC get_post_lineage failed, falling back to manual recursion');
+    }
+
+    const post = await api.getPost(postId);
+    if (!post) return null;
 
     const parents: Post[] = [];
     let currentParentId = post.parentPostId;
+    let depth = 0;
+    const MAX_DEPTH = 20;
 
-    while (currentParentId) {
-      const parent = await api.fetchPost(currentParentId);
+    while (currentParentId && depth < MAX_DEPTH) {
+      const parent = await api.getPost(currentParentId);
       if (parent) {
         parents.unshift(parent);
         currentParentId = parent.parentPostId;
       } else {
         break;
       }
+      depth++;
     }
 
     return { post, parents };
@@ -379,23 +517,25 @@ export const api = {
   deletePost: async (postId: string): Promise<void> => {
     const { error } = await supabase
       .from('posts')
-      .update({ deleted_at: new Date().toISOString() }) // Soft delete
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', postId);
+
     if (error) throw error;
   },
 
   // ENGAGEMENT
   // -------------------------------------------------------------------------
   react: async (postId: string, action: ReactionAction): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     if (action === 'NONE') {
-      await supabase
+      const { error } = await supabase
         .from('post_reactions')
         .delete()
         .eq('subject_id', postId)
         .eq('actor_id', user.id);
+
+      if (error) throw error;
       return;
     }
 
@@ -411,16 +551,15 @@ export const api = {
   },
 
   toggleLike: async (postId: string): Promise<boolean> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { data: existing } = await supabase
       .from('post_reactions')
-      .select('*')
+      .select('id')
       .eq('subject_id', postId)
       .eq('actor_id', user.id)
       .eq('type', 'LIKE')
-      .single();
+      .maybeSingle();
 
     if (existing) {
       await api.react(postId, 'NONE');
@@ -431,11 +570,9 @@ export const api = {
     }
   },
 
-  repostPost: async (postId: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+  repost: async (postId: string): Promise<void> => {
+    const user = await getAuthenticatedUser();
 
-    // Check if we already reposted this
     const { data: existing } = await supabase
       .from('posts')
       .select('id')
@@ -443,16 +580,14 @@ export const api = {
       .eq('parent_id', postId)
       .eq('type', 'repost')
       .is('deleted_at', null)
-      .single();
+      .maybeSingle();
 
     if (existing) {
-      // Un-repost (soft delete)
       await supabase
         .from('posts')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', existing.id);
     } else {
-      // Repost
       const { error } = await supabase.from('posts').insert({
         owner_id: user.id,
         content: '',
@@ -463,20 +598,15 @@ export const api = {
     }
   },
 
-  repost: async (postId: string): Promise<void> => {
-    return api.repostPost(postId);
-  },
-
   toggleBookmark: async (postId: string): Promise<boolean> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { data: existing } = await supabase
       .from('bookmarks')
-      .select('*')
+      .select('id')
       .eq('user_id', user.id)
       .eq('post_id', postId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       const { error } = await supabase
@@ -501,40 +631,39 @@ export const api = {
 
     const { data } = await supabase
       .from('bookmarks')
-      .select('*')
+      .select('id')
       .eq('user_id', user.id)
       .eq('post_id', postId)
-      .single();
+      .maybeSingle();
 
     return !!data;
   },
 
   getBookmarks: async (): Promise<Post[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    const user = await getAuthenticatedUser();
 
     const { data, error } = await supabase
       .from('bookmarks')
       .select(`
-        post:posts(
+        post:posts!inner(
           *,
           author:profiles!posts_owner_id_fkey(*),
           media:post_media(*),
-          reaction_counts:reaction_aggregates(*)
+          reaction_counts:reaction_aggregates!subject_id(*)
         )
       `)
       .eq('user_id', user.id)
+      .is('post.deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     return hydratePosts(data.map((row: any) => mapPost(row.post)));
   },
 
-  // MESSAGING (Realtime)
+  // MESSAGING
   // -------------------------------------------------------------------------
   getConversations: async (): Promise<Conversation[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    const user = await getAuthenticatedUser();
 
     const { data, error } = await supabase
       .from('conversations')
@@ -547,15 +676,16 @@ export const api = {
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
+
     return data.map((c: any) => ({
       ...c,
       pinnedMessageId: c.pinned_message_id,
       participants: (c.participants || []).map((p: any) => p.user),
       unreadCount: c.unread?.[0]?.unread_count || 0
-    })) as any;
+    })) as unknown as Conversation[];
   },
 
-  getConversation: async (conversationId: string): Promise<{ conversation: Conversation, messages: Message[] } | null> => {
+  getConversation: async (conversationId: string): Promise<{ conversation: Conversation; messages: Message[] } | null> => {
     const [conv, msgs] = await Promise.all([
       supabase
         .from('conversations')
@@ -566,19 +696,19 @@ export const api = {
     ]);
 
     if (conv.error) return null;
+
     const transformedConv = {
       ...conv.data,
       pinnedMessageId: (conv.data as any).pinned_message_id,
       participants: (conv.data as any).participants.map((p: any) => p.user)
     };
-    return { conversation: transformedConv as any, messages: msgs };
+
+    return { conversation: transformedConv as unknown as Conversation, messages: msgs };
   },
 
   getMessages: async (conversationId: string): Promise<Message[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    const user = await getAuthenticatedUser();
 
-    // Parallel fetch messages and user's last read timestamp
     const [messagesRes, participantRes] = await Promise.all([
       supabase
         .from('messages')
@@ -613,18 +743,26 @@ export const api = {
   },
 
   sendMessage: async (conversationId: string, text: string, media?: any[]): Promise<Message> => {
-    const { data, error } = await supabase.from('messages').insert({
-      conversation_id: conversationId,
-      sender_id: (await supabase.auth.getUser()).data.user!.id,
-      content: text
-    }).select('*, sender:profiles!messages_sender_id_fkey(*)').single();
+    validateContent(text, 10000);
+
+    const user = await getAuthenticatedUser();
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: text
+      })
+      .select('*, sender:profiles!messages_sender_id_fkey(*)')
+      .single();
+
     if (error) throw error;
-    return data as any;
+    return data as unknown as Message;
   },
 
   markConversationAsRead: async (conversationId: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const user = await getAuthenticatedUser();
 
     await supabase
       .from('conversation_participants')
@@ -634,12 +772,18 @@ export const api = {
   },
 
   createConversation: async (userId: string): Promise<Conversation> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
-    const { data: conv, error } = await supabase.from('conversations').insert({
-      type: 'PRIVATE'
-    }).select().single();
+    if (userId === user.id) {
+      throw new Error('Cannot create conversation with yourself');
+    }
+
+    const { data: conv, error } = await supabase
+      .from('conversations')
+      .insert({ type: 'PRIVATE' })
+      .select()
+      .single();
+
     if (error) throw error;
 
     await supabase.from('conversation_participants').insert([
@@ -647,16 +791,22 @@ export const api = {
       { conversation_id: conv.id, user_id: userId, is_admin: true }
     ]);
 
-    return conv as any;
+    return conv as unknown as Conversation;
   },
 
   createGroupConversation: async (name: string, userIds: string[]): Promise<Conversation> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
-    const { data: conv, error } = await supabase.from('conversations').insert({
-      type: 'GROUP'
-    }).select().single();
+    if (userIds.length === 0) {
+      throw new Error('Group must have at least one other participant');
+    }
+
+    const { data: conv, error } = await supabase
+      .from('conversations')
+      .insert({ type: 'GROUP' })
+      .select()
+      .single();
+
     if (error) throw error;
 
     const participants = [user.id, ...userIds].map(uid => ({
@@ -667,16 +817,18 @@ export const api = {
 
     await supabase.from('conversation_participants').insert(participants);
 
-    return conv as any;
+    return conv as unknown as Conversation;
   },
 
   createChannelConversation: async (name: string, description?: string): Promise<Conversation> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
-    const { data: conv, error } = await supabase.from('conversations').insert({
-      type: 'CHANNEL'
-    }).select().single();
+    const { data: conv, error } = await supabase
+      .from('conversations')
+      .insert({ type: 'CHANNEL' })
+      .select()
+      .single();
+
     if (error) throw error;
 
     await supabase.from('conversation_participants').insert({
@@ -685,16 +837,20 @@ export const api = {
       is_admin: true
     });
 
-    return conv as any;
+    return conv as unknown as Conversation;
   },
 
-  updateConversation: async (conversationId: string, updates: any): Promise<void> => {
+  updateConversation: async (conversationId: string, updates: { type?: string; name?: string; description?: string }): Promise<void> => {
+    const updatePayload: any = {};
+    if (updates.type) updatePayload.type = updates.type;
+    if (updates.name) updatePayload.name = updates.name;
+    if (updates.description) updatePayload.description = updates.description;
+
     const { error } = await supabase
       .from('conversations')
-      .update({
-        type: updates.type,
-      })
+      .update(updatePayload)
       .eq('id', conversationId);
+
     if (error) throw error;
   },
 
@@ -703,12 +859,12 @@ export const api = {
       .from('conversations')
       .delete()
       .eq('id', conversationId);
+
     if (error) throw error;
   },
 
   addReaction: async (conversationId: string, messageId: string, emoji: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { error } = await supabase
       .from('message_reactions')
@@ -741,11 +897,13 @@ export const api = {
   },
 
   pinConversation: async (conversationId: string, isPinned: boolean): Promise<void> => {
+    const user = await getAuthenticatedUser();
+
     await supabase
       .from('conversation_participants')
       .update({ is_pinned: isPinned })
       .eq('conversation_id', conversationId)
-      .eq('user_id', (await supabase.auth.getUser()).data.user!.id);
+      .eq('user_id', user.id);
   },
 
   promoteToAdmin: async (conversationId: string, userId: string): Promise<void> => {
@@ -765,13 +923,24 @@ export const api = {
   },
 
   getInviteLink: async (conversationId: string): Promise<string> => {
-    return `https://postr.dev/invite/${conversationId}`;
+    const user = await getAuthenticatedUser();
+    const token = generateSecureToken();
+    const expiresAt = new Date(Date.now() + INVITE_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+
+    const { error } = await supabase.from('conversation_invites').insert({
+      conversation_id: conversationId,
+      token: token,
+      created_by: user.id,
+      expires_at: expiresAt.toISOString()
+    });
+
+    if (error) throw error;
+    return `https://postr.dev/invite/${token}`;
   },
 
   // PROFILES
   // -------------------------------------------------------------------------
-  fetchUser: async (usernameOrId: string): Promise<User | null> => {
-    // Check if UUID or username
+  getUser: async (usernameOrId: string): Promise<User | null> => {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(usernameOrId);
 
     let query = supabase.from('profiles').select('*');
@@ -787,10 +956,16 @@ export const api = {
   },
 
   getProfile: async (userId: string): Promise<UserProfile> => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
     if (error) throw error;
 
     const user = mapProfile(data);
+    if (!user) throw new Error('Invalid profile data');
 
     return {
       ...user,
@@ -808,10 +983,11 @@ export const api = {
         *,
         author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
-        reaction_counts:reaction_aggregates(*)
+        reaction_counts:reaction_aggregates!subject_id(*)
       `)
       .eq('owner_id', userId)
       .is('parent_id', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -825,10 +1001,11 @@ export const api = {
         *,
         author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
-        reaction_counts:reaction_aggregates(*)
+        reaction_counts:reaction_aggregates!subject_id(*)
       `)
       .eq('owner_id', userId)
       .not('parent_id', 'is', null)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -842,46 +1019,30 @@ export const api = {
         *,
         author:profiles!posts_owner_id_fkey(*),
         media:post_media!inner(*),
-        reaction_counts:reaction_aggregates(*)
+        reaction_counts:reaction_aggregates!subject_id(*)
       `)
       .eq('owner_id', userId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     return hydratePosts(data.map(mapPost));
   },
 
-  getProfileReactions: async (userId: string): Promise<Post[]> => {
-    const { data, error } = await supabase
-      .from('post_reactions')
-      .select(`
-        post:posts(
-          *,
-          author:profiles!posts_owner_id_fkey(*),
-          media:post_media(*),
-          reaction_counts:reaction_aggregates(*)
-        )
-      `)
-      .eq('actor_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return hydratePosts(data.map((row: any) => mapPost(row.post)));
-  },
-
   getProfileLikes: async (userId: string): Promise<Post[]> => {
     const { data, error } = await supabase
       .from('post_reactions')
       .select(`
-        post:posts(
+        post:posts!inner(
           *,
           author:profiles!posts_owner_id_fkey(*),
           media:post_media(*),
-          reaction_counts:reaction_aggregates(*)
+          reaction_counts:reaction_aggregates!subject_id(*)
         )
       `)
       .eq('actor_id', userId)
       .eq('type', 'LIKE')
+      .is('post.deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -889,6 +1050,15 @@ export const api = {
   },
 
   updateProfile: async (updates: Partial<UserProfile>): Promise<void> => {
+    const user = await getAuthenticatedUser();
+
+    if (updates.bio && updates.bio.length > MAX_BIO_LENGTH) {
+      throw new Error(`Bio cannot exceed ${MAX_BIO_LENGTH} characters`);
+    }
+    if (updates.name && updates.name.length > MAX_NAME_LENGTH) {
+      throw new Error(`Name cannot exceed ${MAX_NAME_LENGTH} characters`);
+    }
+
     const { error } = await supabase.from('profiles').update({
       name: updates.name,
       bio: updates.bio,
@@ -896,21 +1066,24 @@ export const api = {
       website: updates.website,
       avatar: updates.avatar,
       header_image: updates.headerImage
-    }).eq('id', (await supabase.auth.getUser()).data.user!.id);
+    }).eq('id', user.id);
+
     if (error) throw error;
   },
 
   toggleFollow: async (targetUserId: string): Promise<boolean> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-    if (user.id === targetUserId) throw new Error('Cannot follow yourself');
+    const user = await getAuthenticatedUser();
+
+    if (user.id === targetUserId) {
+      throw new Error('Cannot follow yourself');
+    }
 
     const { data: existing } = await supabase
       .from('follows')
-      .select('*')
+      .select('id')
       .eq('follower_id', user.id)
       .eq('following_id', targetUserId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       const { error } = await supabase
@@ -929,41 +1102,33 @@ export const api = {
     }
   },
 
-  followUser: async (userId: string): Promise<void> => {
-    await api.toggleFollow(userId);
-  },
-
-  unfollowUser: async (userId: string): Promise<void> => {
-    await api.toggleFollow(userId);
-  },
-
-  fetchUserRelationship: async (targetUserId: string): Promise<ViewerRelationship> => {
+  getUserRelationship: async (targetUserId: string): Promise<ViewerRelationship> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { type: 'NOT_FOLLOWING', targetUserId };
     if (user.id === targetUserId) return { type: 'SELF', targetUserId };
 
     const { data: block } = await supabase
       .from('blocks')
-      .select('*')
+      .select('id')
       .eq('blocker_id', user.id)
       .eq('blocked_id', targetUserId)
-      .single();
+      .maybeSingle();
     if (block) return { type: 'BLOCKED', targetUserId };
 
     const { data: mute } = await supabase
       .from('mutes')
-      .select('*')
+      .select('id')
       .eq('muter_id', user.id)
       .eq('muted_id', targetUserId)
-      .single();
+      .maybeSingle();
     if (mute) return { type: 'MUTED', targetUserId };
 
     const { data: follow } = await supabase
       .from('follows')
-      .select('*')
+      .select('id')
       .eq('follower_id', user.id)
       .eq('following_id', targetUserId)
-      .single();
+      .maybeSingle();
 
     if (follow) return { type: 'FOLLOWING', targetUserId };
 
@@ -971,36 +1136,31 @@ export const api = {
   },
 
   muteUser: async (userId: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
     const { error } = await supabase.from('mutes').insert({ muter_id: user.id, muted_id: userId });
     if (error) throw error;
   },
 
   unmuteUser: async (userId: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
     const { error } = await supabase.from('mutes').delete().eq('muter_id', user.id).eq('muted_id', userId);
     if (error) throw error;
   },
 
   blockUser: async (userId: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
     const { error } = await supabase.from('blocks').insert({ blocker_id: user.id, blocked_id: userId });
     if (error) throw error;
   },
 
   unblockUser: async (userId: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
     const { error } = await supabase.from('blocks').delete().eq('blocker_id', user.id).eq('blocked_id', userId);
     if (error) throw error;
   },
 
   getFollowing: async (userId?: string): Promise<User[]> => {
-    const id = userId || (await supabase.auth.getUser()).data.user?.id;
-    if (!id) return [];
+    const id = userId || (await getAuthenticatedUser()).id;
 
     const { data, error } = await supabase
       .from('follows')
@@ -1008,7 +1168,7 @@ export const api = {
       .eq('follower_id', id);
 
     if (error) throw error;
-    return data.map((f: any) => f.target) as User[];
+    return data.map((f: any) => mapProfile(f.target)).filter(Boolean) as User[];
   },
 
   getFollowers: async (userId: string): Promise<User[]> => {
@@ -1018,12 +1178,11 @@ export const api = {
       .eq('following_id', userId);
 
     if (error) throw error;
-    return data.map((f: any) => f.follower) as User[];
+    return data.map((f: any) => mapProfile(f.follower)).filter(Boolean) as User[];
   },
 
   votePoll: async (postId: string, choiceIndex: number): Promise<Post> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { error } = await supabase.rpc('vote_on_poll', {
       p_post_id: postId,
@@ -1033,19 +1192,22 @@ export const api = {
 
     if (error) throw error;
 
-    const updatedPost = await api.fetchPost(postId);
+    const updatedPost = await api.getPost(postId);
     if (!updatedPost) throw new Error('Failed to fetch updated post');
     return updatedPost;
   },
 
   createPoll: async (pollData: { question: string; choices: any[]; durationSeconds: number }): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    validateContent(pollData.question, 500);
+    validatePollChoices(pollData.choices);
+
+    const user = await getAuthenticatedUser();
 
     const { data: post, error: postError } = await supabase.from('posts').insert({
       content: pollData.question,
       owner_id: user.id
     }).select().single();
+
     if (postError) throw postError;
 
     const { error: pollError } = await supabase.from('polls').insert({
@@ -1054,10 +1216,19 @@ export const api = {
       choices: pollData.choices,
       expires_at: new Date(Date.now() + pollData.durationSeconds * 1000).toISOString()
     });
-    if (pollError) throw pollError;
+
+    if (pollError) {
+      await supabase
+        .from('posts')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', post.id);
+      throw pollError;
+    }
   },
 
   createReport: async (entityType: string, entityId: string, reportType: string, reporterId: string, reason: string): Promise<void> => {
+    validateContent(reason, 1000);
+
     const { error } = await supabase.from('reports').insert({
       target_type: entityType,
       target_id: entityId,
@@ -1065,21 +1236,21 @@ export const api = {
       reporter_id: reporterId,
       reason: reason
     });
+
     if (error) throw error;
   },
 
   // NOTIFICATIONS
   // -------------------------------------------------------------------------
   getNotifications: async (): Promise<Notification[]> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { data, error } = await supabase
       .from('notifications')
       .select(`
-                *,
-                actor:profiles!actor_id(*)
-            `)
+        *,
+        actor:profiles!actor_id(*)
+      `)
       .eq('recipient_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -1087,23 +1258,18 @@ export const api = {
 
     return data.map((n: any) => ({
       id: n.id,
-      type: n.type === 'LIKE' ? 'REACTION' : n.type, // Map DB type to Frontend type
+      type: n.type === 'LIKE' ? 'REACTION' : n.type,
       actor: n.actor,
       recipientId: n.recipient_id,
       createdAt: n.created_at,
       isRead: n.is_read,
       postId: n.data?.post_id,
       postSnippet: n.data?.post_snippet
-    })) as Notification[];
-  },
-
-  fetchNotifications: async (): Promise<Notification[]> => {
-    return api.getNotifications();
+    })) as unknown as Notification[];
   },
 
   getNotificationSettings: async (): Promise<NotificationSettings> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { data, error } = await supabase
       .from('user_settings')
@@ -1116,6 +1282,7 @@ export const api = {
     const n = data?.notifications || {};
     return {
       qualityFilter: n.quality_filter ?? false,
+      mentionsOnly: n.mentions_only ?? false,
       pushMentions: n.push_mentions ?? true,
       pushReplies: n.push_replies ?? true,
       pushLikes: n.push_likes ?? true,
@@ -1124,10 +1291,8 @@ export const api = {
   },
 
   updateNotificationSettings: async (settings: Partial<NotificationSettings>): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
-    // First fetch existing to merge (since it's a jsonb column)
     const { data: existing } = await supabase
       .from('user_settings')
       .select('notifications')
@@ -1136,9 +1301,9 @@ export const api = {
 
     const current = existing?.notifications || {};
 
-    // Map camelCase to snake_case for DB
     const updates: any = {};
     if (settings.qualityFilter !== undefined) updates.quality_filter = settings.qualityFilter;
+    if (settings.mentionsOnly !== undefined) updates.mentions_only = settings.mentionsOnly;
     if (settings.pushMentions !== undefined) updates.push_mentions = settings.pushMentions;
     if (settings.pushReplies !== undefined) updates.push_replies = settings.pushReplies;
     if (settings.pushLikes !== undefined) updates.push_likes = settings.pushLikes;
@@ -1157,8 +1322,7 @@ export const api = {
   // SETTINGS & PRIVACY
   // -------------------------------------------------------------------------
   getPrivacySettings: async (): Promise<PrivacySettings> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { data, error } = await supabase
       .from('user_settings')
@@ -1179,8 +1343,7 @@ export const api = {
   },
 
   updatePrivacySettings: async (settings: Partial<PrivacySettings>): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { data: existing } = await supabase
       .from('user_settings')
@@ -1207,16 +1370,14 @@ export const api = {
     if (error) throw error;
   },
 
-  // INFRASTRUCTURE
-  // -------------------------------------------------------------------------
   updateCountry: async (country: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getAuthenticatedUser();
 
     const { error } = await supabase
       .from('user_settings')
       .update({ country })
       .eq('user_id', user.id);
+
     if (error) throw error;
   },
 
@@ -1224,43 +1385,44 @@ export const api = {
     return new Promise(resolve => setTimeout(resolve, 500));
   },
 
-  getUserId: (): string => {
-    return (api as any).CURRENT_USER_ID || '0';
-  },
-
   // SEARCH & TRENDING
   // -------------------------------------------------------------------------
   searchUsers: async (query: string): Promise<User[]> => {
+    if (!query || query.trim().length === 0) return [];
+
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .or(`username.ilike.%${query}%,name.ilike.%${query}%`)
-      .limit(20);
+      .limit(SEARCH_LIMIT);
 
     if (error) throw error;
-    return data as User[];
+    return data.map(mapProfile).filter(Boolean) as User[];
   },
 
   searchPosts: async (query: string): Promise<Post[]> => {
+    if (!query || query.trim().length === 0) return [];
+
     const { data, error } = await supabase
       .from('posts')
       .select(`
         *,
         author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
-        reaction_counts:reaction_aggregates(*)
+        reaction_counts:reaction_aggregates!subject_id(*)
       `)
       .textSearch('fts', query, {
         type: 'websearch',
         config: 'english'
       })
-      .limit(20);
+      .is('deleted_at', null)
+      .limit(SEARCH_LIMIT);
 
     if (error) throw error;
     return hydratePosts(data.map(mapPost));
   },
 
-  search: async (query: string): Promise<{ posts: Post[], users: User[] }> => {
+  search: async (query: string): Promise<{ posts: Post[]; users: User[] }> => {
     const [posts, users] = await Promise.all([
       api.searchPosts(query),
       api.searchUsers(query)
@@ -1268,7 +1430,7 @@ export const api = {
     return { posts, users };
   },
 
-  getTrending: async (limit: number = 10): Promise<{ hashtag: string, count: number }[]> => {
+  getTrending: async (limit: number = 10): Promise<{ hashtag: string; count: number }[]> => {
     const { data, error } = await supabase
       .from('hashtags')
       .select('tag, usage_count')
@@ -1279,25 +1441,120 @@ export const api = {
     return data.map(h => ({ hashtag: h.tag, count: h.usage_count }));
   },
 
-  getTrends: async (limit: number = 10): Promise<{ hashtag: string, count: number }[]> => {
-    return api.getTrending(limit);
-  },
-
   getPostsByHashtag: async (tag: string): Promise<Post[]> => {
+    if (!tag || tag.trim().length === 0) return [];
+
     const { data, error } = await supabase
       .from('posts')
       .select(`
         *,
         author:profiles!posts_owner_id_fkey(*),
         media:post_media(*),
-        reaction_counts:reaction_aggregates(*)
+        reaction_counts:reaction_aggregates!subject_id(*)
       `)
       .ilike('content', `%#${tag}%`)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     return hydratePosts(data.map(mapPost));
   },
 
-};
+  // REALTIME SUBSCRIPTIONS
+  // -------------------------------------------------------------------------
+  subscribeToConversation: (conversationId: string, onMessage: (message: Message) => void) => {
+    return supabase
+      .channel(`conversation:${conversationId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`
+      },
+        async (payload) => {
+          const { data } = await supabase
+            .from('messages')
+            .select('*, sender:profiles!messages_sender_id_fkey(*)')
+            .eq('id', payload.new.id)
+            .single();
 
+          if (data) {
+            onMessage({
+              id: data.id,
+              conversationId: data.conversation_id,
+              senderId: data.sender_id,
+              text: data.content,
+              createdAt: data.created_at,
+              isRead: false,
+              media: data.media,
+              sender: data.sender,
+              reactions: {}
+            });
+          }
+        }
+      )
+      .subscribe();
+  },
+
+  subscribeToNotifications: (userId: string, onNotification: (notification: Notification) => void) => {
+    return supabase
+      .channel(`notifications:${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `recipient_id=eq.${userId}`
+      },
+        async (payload) => {
+          const { data } = await supabase
+            .from('notifications')
+            .select('*, actor:profiles!actor_id(*)')
+            .eq('id', payload.new.id)
+            .single();
+
+          if (data) {
+            onNotification({
+              id: data.id,
+              type: data.type === 'LIKE' ? 'REACTION' : data.type,
+              actor: data.actor,
+              recipientId: data.recipient_id,
+              createdAt: data.created_at,
+              isRead: data.is_read,
+              postId: data.data?.post_id,
+              postSnippet: data.data?.post_snippet
+            });
+          }
+        }
+      )
+      .subscribe();
+  },
+
+  subscribeToPostComments: (postId: string, onComment: (comment: Post) => void) => {
+    return supabase
+      .channel(`post_comments:${postId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'posts',
+        filter: `parent_id=eq.${postId}`
+      },
+        async (payload) => {
+          const comment = await api.getPost(payload.new.id);
+          if (comment) onComment(comment);
+        }
+      )
+      .subscribe();
+  },
+
+  hasNewFeedPosts: async (sinceTimestamp: string): Promise<number> => {
+    const { count, error } = await supabase
+      .from('posts')
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
+      .is('parent_id', null)
+      .gt('created_at', sinceTimestamp)
+
+    if (error) return 0;
+    return count || 0;
+  },
+};

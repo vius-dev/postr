@@ -4,7 +4,7 @@ import { Conversation } from '@/types/message';
 import { useTheme } from '@/theme/theme';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CURRENT_USER_ID } from '@/lib/api';
+import { useAuth } from '@/providers/AuthProvider';
 
 interface ConversationItemProps {
     conversation: Conversation;
@@ -15,16 +15,17 @@ interface ConversationItemProps {
     onLongPress?: () => void;
 }
 
-export default function ConversationItem({ 
-    conversation, 
-    isUnread, 
-    isMuted, 
-    lastMessage, 
-    onPress, 
-    onLongPress 
+export default function ConversationItem({
+    conversation,
+    isUnread,
+    isMuted,
+    lastMessage,
+    onPress,
+    onLongPress
 }: ConversationItemProps) {
     const { theme } = useTheme();
     const router = useRouter();
+    const { user: currentUser } = useAuth();
 
     const formatTime = (dateString: string) => {
         const date = new Date(dateString);
@@ -42,7 +43,7 @@ export default function ConversationItem({
 
     const renderAvatar = () => {
         if (conversation.type === 'DM') {
-            const otherUser = conversation.participants.find(p => p.id !== '0') || conversation.participants[0];
+            const otherUser = conversation.participants.find(p => p.id !== currentUser?.id) || conversation.participants[0];
             return <Image source={{ uri: otherUser.avatar }} style={styles.avatar} />;
         } else {
             let iconName: keyof typeof Ionicons.glyphMap;
@@ -61,7 +62,7 @@ export default function ConversationItem({
 
     const getName = () => {
         if (conversation.type === 'DM') {
-            const otherUser = conversation.participants.find(p => p.id !== CURRENT_USER_ID) || conversation.participants[0];
+            const otherUser = conversation.participants.find(p => p.id !== currentUser?.id) || conversation.participants[0];
             return (
                 <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>
                     {otherUser.name}

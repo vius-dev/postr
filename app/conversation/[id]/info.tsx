@@ -9,18 +9,20 @@ import { User } from '@/types/user';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { brandColors } from '@/theme/colors';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function ConversationInfoScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
 
+  const { user: currentUser } = useAuth();
+  const currentUserId = currentUser?.id;
+
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
   const [inviteLink, setInviteLink] = useState('');
-
-  const currentUserId = api.getUserId();
 
   const loadConversationDetails = useCallback(async (id: string) => {
     setLoading(true);
@@ -102,7 +104,7 @@ export default function ConversationInfoScreen() {
   }
 
   const isOwner = conversation.ownerId === currentUserId;
-  const isAdmin = conversation.adminIds?.includes(currentUserId) ?? false;
+  const isAdmin = conversation.adminIds?.includes(currentUserId || '') ?? false;
 
   const renderMemberItem = (user: User, role?: 'Owner' | 'Admin') => (
     <View key={user.id} style={styles.memberItem}>

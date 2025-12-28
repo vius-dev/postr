@@ -7,6 +7,10 @@ export interface Message {
     createdAt: string;
     type?: 'CHAT' | 'SYSTEM';
     reactions?: Record<string, number>;
+    conversationId?: string;
+    isRead?: boolean;
+    media?: any[];
+    sender?: User;
 }
 
 export type ConversationType = 'DM' | 'GROUP' | 'CHANNEL';

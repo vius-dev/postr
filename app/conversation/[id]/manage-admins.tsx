@@ -8,16 +8,18 @@ import { Conversation } from '@/types/message';
 import { User } from '@/types/user';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function ManageAdminsScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
 
+  const { user: currentUser } = useAuth();
+  const currentUserId = currentUser?.id;
+
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const currentUserId = api.getUserId();
 
   const loadConversationDetails = useCallback(async (id: string) => {
     setLoading(true);

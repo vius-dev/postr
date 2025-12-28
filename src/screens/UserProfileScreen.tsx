@@ -16,6 +16,8 @@ import ProfileActionRow, { ViewerRelationship } from '@/components/profile/Profi
 import ProfileTabs, { ProfileTab } from '@/components/profile/ProfileTabs';
 import PostCard from '@/components/PostCard';
 import { eventEmitter } from '@/lib/EventEmitter';
+import { getDb } from '@/lib/db/sqlite';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
 
 
 export default function UserProfileScreen() {
@@ -38,31 +40,121 @@ export default function UserProfileScreen() {
   const { username: paramUsername } = useLocalSearchParams();
 
   useEffect(() => {
-    const fetchUser = async () => {
-      setLoading(true);
+    const loadUser = async (silent = false) => {
+      if (!silent) setLoading(true);
+      const usernameToFetch = (paramUsername as string) || currentUser?.id;
+      if (!usernameToFetch) return;
+
       try {
-        const usernameToFetch = (paramUsername as string) || currentUser?.id;
-        if (!usernameToFetch) return;
+        const db = await getDb();
 
-        const fetchedUser = await api.fetchUser(usernameToFetch);
-        if (fetchedUser) {
-          setUser(fetchedUser);
+        // 1. Try Local Load
+        const localUser: any = await db.getFirstAsync(
+          'SELECT * FROM users WHERE id = ? OR username = ?',
+          [usernameToFetch, usernameToFetch]
+        );
 
-          // Fetch initial posts
-          const initialPosts = await api.getProfilePosts(fetchedUser.id);
-          setPosts(initialPosts);
+        if (localUser) {
+          const mappedUser: User = {
+            id: localUser.id,
+            username: localUser.username,
+            name: localUser.display_name,
+            avatar: localUser.avatar_url,
+            headerImage: localUser.header_url,
+            is_verified: !!localUser.verified,
+            is_active: true,
+            is_limited: false,
+            is_shadow_banned: false,
+            is_suspended: false,
+            is_muted: false,
+          };
+          setUser(mappedUser);
 
-          const rel = await api.fetchUserRelationship(fetchedUser.id);
-          setRelationship(rel);
+          // Load cached posts with Reactions
+          const rows = await db.getAllAsync(`
+            SELECT
+              p.*,
+              u.username, u.display_name, u.avatar_url, u.verified as is_verified,
+              r.reaction_type as my_reaction
+            FROM feed_items f
+            JOIN posts p ON f.post_id = p.id
+            JOIN users u ON p.author_id = u.id
+            LEFT JOIN reactions r ON p.id = r.post_id AND r.user_id = ?
+            WHERE f.feed_type = ?
+            ORDER BY f.rank_score DESC
+          `, [currentUser?.id || '', `profile:${localUser.id}`]) as any[];
+
+          const mappedPosts: Post[] = rows.map((row: any) => ({
+            id: row.id,
+            content: row.content,
+            createdAt: new Date(row.created_at).toISOString(),
+            updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+            author: {
+              id: row.author_id,
+              username: row.username,
+              name: row.display_name,
+              avatar: row.avatar_url,
+              is_verified: !!row.is_verified,
+              is_suspended: false,
+              is_shadow_banned: false,
+              is_limited: false,
+            },
+            media: row.media_json ? JSON.parse(row.media_json) : [],
+            likeCount: row.like_count || 0,
+            commentCount: row.reply_count || 0,
+            repostCount: row.repost_count || 0,
+            dislikeCount: 0,
+            laughCount: 0,
+            userReaction: row.my_reaction || 'NONE',
+            isBookmarked: false,
+          }));
+          setPosts(mappedPosts);
+          if (!silent) setLoading(false);
+        } else {
+          // If we don't have local user, we MUST rely on sync and loading indicator
+          // But if this was a silent update, we shouldn't be here (unless data vanished)
         }
-      } catch (error) {
-        console.error("Failed to fetch user", error);
+
+        // 2. Trigger Background Sync (Fire and forget)
+        // Only trigger sync if NOT silent (initial load) OR if specifically requested?
+        // Actually, handleUpdate calls this. We might want to skip triggering ANOTHER sync if we just updated from one.
+        // But for now, let's keep it simple: initial load triggers sync. Update load doesn't need to trigger sync.
+        if (!silent) {
+          SyncEngine.syncProfile(usernameToFetch).catch(console.error);
+        }
+
+      } catch (e) {
+        console.error('Failed to load profile locally', e);
       } finally {
-        setLoading(false);
+        if (!user && loading && !silent) setLoading(false);
       }
     };
-    fetchUser();
-  }, [paramUsername]);
+
+    // Listen for updates
+    const handleUpdate = async (updatedUserId: string) => {
+      const usernameToFetch = (paramUsername as string) || currentUser?.id;
+      if (!usernameToFetch) return;
+
+      // Check relevance via DB (avoids stale state)
+      const db = await getDb();
+      const relevant = await db.getFirstAsync(
+        'SELECT id FROM users WHERE id = ? AND (id = ? OR username = ?)',
+        [updatedUserId, usernameToFetch, usernameToFetch]
+      );
+
+      if (relevant) {
+        loadUser(true); // Silent update!
+      }
+    };
+
+    eventEmitter.on('profileUpdated', handleUpdate);
+
+    loadUser(false); // Initial load (not silent)
+
+    return () => {
+      eventEmitter.off('profileUpdated', handleUpdate);
+    };
+  }, [paramUsername, currentUser?.id]); // Added currentUser.id dependency for reaction join
 
   useEffect(() => {
     const fetchTabData = async () => {
@@ -111,7 +203,7 @@ export default function UserProfileScreen() {
       } else if (selectedTab === 'Dis/Likes' && reactions.length === 0) {
         setIsListLoading(true);
         try {
-          const data = await api.getProfileReactions(user.id);
+          const data = await api.getProfileLikes(user.id);
           setReactions(data);
         } catch (error) {
           console.error("Failed to fetch reactions", error);
@@ -154,11 +246,11 @@ export default function UserProfileScreen() {
     if (!user || isFollowingLoading) return;
     setIsFollowingLoading(true);
     try {
-      await api.followUser(user.id);
-      const newRel = await api.fetchUserRelationship(user.id);
+      await api.toggleFollow(user.id);
+      const newRel = await api.getUserRelationship(user.id);
       setRelationship(newRel);
 
-      // Refresh following list to show the newly followed user
+      // Refresh following list
       if (currentUser) {
         const updatedFollowing = await api.getFollowing(currentUser.id);
         setFollowing(updatedFollowing);
@@ -191,11 +283,11 @@ export default function UserProfileScreen() {
     if (!user || isFollowingLoading) return;
     setIsFollowingLoading(true);
     try {
-      await api.unfollowUser(user.id);
-      const newRel = await api.fetchUserRelationship(user.id);
+      await api.toggleFollow(user.id);
+      const newRel = await api.getUserRelationship(user.id);
       setRelationship(newRel);
 
-      // Refresh following list to remove the unfollowed user
+      // Refresh following list
       if (currentUser) {
         const updatedFollowing = await api.getFollowing(currentUser.id);
         setFollowing(updatedFollowing);
@@ -229,9 +321,9 @@ export default function UserProfileScreen() {
         <ProfileHeader
           user={user}
           action={
-            relationship && (
+            (relationship || (user.id === currentUser?.id)) && (
               <ProfileActionRow
-                relationship={relationship}
+                relationship={relationship || { type: 'SELF', targetUserId: user.id }}
                 onFollow={handleFollow}
                 onUnfollow={handleUnfollow}
                 onEditProfile={() => router.push('/edit')}

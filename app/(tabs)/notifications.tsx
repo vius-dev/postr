@@ -19,19 +19,30 @@ export default function NotificationsScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
-  const { qualityFilter, mentionsOnly, mutedWords } = useNotificationsSettings();
+  const { qualityFilter, mentionsOnly, mutedWords, setQualityFilter, setMentionsOnly } = useNotificationsSettings();
   const [activeTab, setActiveTab] = useState<Tab>('ALL');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadNotifications();
+    loadSettings();
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const settings = await api.getNotificationSettings();
+      setQualityFilter(settings.qualityFilter);
+      setMentionsOnly(settings.mentionsOnly);
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  };
 
   const loadNotifications = async () => {
     setLoading(true);
     try {
-      const data = await api.fetchNotifications();
+      const data = await api.getNotifications();
       setNotifications(data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -49,7 +60,7 @@ export default function NotificationsScreen() {
 
     // 3. Muted Words Filter
     if (mutedWords.length > 0) {
-      const content = (n.post?.content || '').toLowerCase();
+      const content = (n.post?.content || n.postSnippet || '').toLowerCase();
       const hasMutedWord = mutedWords.some(word => content.includes(word));
       if (hasMutedWord) return false;
     }

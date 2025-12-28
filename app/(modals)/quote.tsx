@@ -21,7 +21,7 @@ export default function QuoteScreen() {
     const loadPost = async () => {
       if (id && typeof id === 'string') {
         try {
-          const data = await api.fetchPost(id);
+          const data = await api.getPost(id);
           setPost(data);
         } catch (error) {
           console.error('[Quote] Failed to fetch post:', error);

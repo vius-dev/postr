@@ -5,13 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { api, CURRENT_USER_ID } from '@/lib/api';
+import { api } from '@/lib/api';
 import { User } from '@/types/user';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function CreateGroupScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const { user: currentUser } = useAuth();
   const [groupName, setGroupName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
@@ -20,8 +22,8 @@ export default function CreateGroupScreen() {
   useEffect(() => {
     const fetchUsers = async () => {
       // In a real app, you'd fetch following or contacts.
-      const allUsers = await api.getFollowing(CURRENT_USER_ID);
-      setUsers(allUsers.filter(u => u.id !== CURRENT_USER_ID));
+      const allUsers = await api.getFollowing(currentUser?.id);
+      setUsers(allUsers.filter(u => u.id !== currentUser?.id));
     };
     fetchUsers();
   }, []);

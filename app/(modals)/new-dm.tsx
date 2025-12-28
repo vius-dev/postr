@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
@@ -7,18 +7,21 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/lib/api';
 import { User } from '@/types/user';
-
+import { useAuth } from '@/providers/AuthProvider';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
 
 export default function NewDirectMessageScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const { user: currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
 
-  useState(() => {
-    api.getFollowing('0').then(setUsers);
-  });
+  useEffect(() => {
+    if (currentUser?.id) {
+      api.getFollowing(currentUser.id).then(setUsers);
+    }
+  }, [currentUser?.id]);
 
   const filteredUsers = useMemo(() => {
     if (!searchQuery) return users;

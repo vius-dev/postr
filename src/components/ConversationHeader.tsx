@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Conversation } from '@/types/message';
 import { useRouter } from 'expo-router';
 import { api } from '@/lib/api';
+import { useAuth } from '@/providers/AuthProvider';
 
 interface ConversationHeaderProps {
     conversation: Conversation | null;
@@ -14,7 +15,8 @@ interface ConversationHeaderProps {
 const ConversationHeader: React.FC<ConversationHeaderProps> = ({ conversation }) => {
     const { theme } = useTheme();
     const router = useRouter();
-    const currentUserId = api.getUserId();
+    const { user: currentUser } = useAuth();
+    const currentUserId = currentUser?.id;
 
     if (!conversation) {
         return null;

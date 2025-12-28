@@ -47,7 +47,7 @@ export default function PollView({ poll: initialPoll, postId }: PollViewProps) {
       // [RULE 8] Fallback: Fetch existing state if we are out of sync
       if (errorMessage.includes('already voted')) {
         try {
-          const freshPost = await api.fetchPost(postId);
+          const freshPost = await api.getPost(postId);
           if (freshPost?.poll) {
             setPoll(freshPost.poll);
           }

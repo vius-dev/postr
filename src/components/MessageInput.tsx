@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { Conversation } from '@/types/message';
 import { api } from '@/lib/api';
+import { useAuth } from '@/providers/AuthProvider';
 
 interface MessageInputProps {
   conversation: Conversation | null;
@@ -14,7 +15,8 @@ interface MessageInputProps {
 const MessageInput: React.FC<MessageInputProps> = ({ conversation, onSend }) => {
   const { theme } = useTheme();
   const [message, setMessage] = useState('');
-  const currentUserId = api.getUserId();
+  const { user: currentUser } = useAuth();
+  const currentUserId = currentUser?.id;
 
   const handleSend = () => {
     if (message.trim().length > 0) {
@@ -27,7 +29,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ conversation, onSend }) => 
     return null;
   }
 
-  const canSendMessage = conversation.type !== 'CHANNEL' || conversation.adminIds?.includes(currentUserId) || conversation.ownerId === currentUserId;
+  const canSendMessage = conversation.type !== 'CHANNEL' || conversation.adminIds?.includes(currentUserId || '') || conversation.ownerId === currentUserId;
 
   return (
     <KeyboardAvoidingView
@@ -60,38 +62,38 @@ const MessageInput: React.FC<MessageInputProps> = ({ conversation, onSend }) => 
 };
 
 const styles = StyleSheet.create({
-    composerContainer: {
-        flexDirection: 'row',
-        padding: 10,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        alignItems: 'center',
-    },
-    input: {
-        flex: 1,
-        borderRadius: 20,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
-        fontSize: 16,
-        maxHeight: 100,
-        marginRight: 10,
-    },
-    sendButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    readOnlyContainer: {
-        padding: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    readOnlyText: {
-        fontSize: 14,
-        fontStyle: 'italic',
-    },
+  composerContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    fontSize: 16,
+    maxHeight: 100,
+    marginRight: 10,
+  },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  readOnlyContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  readOnlyText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
 });
 
 export default MessageInput;

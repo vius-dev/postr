@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await api.ensureProfileExists(session.user);
 
           // Fetch real user profile from Supabase
-          const res = await api.fetchUser(userId);
+          const res = await api.getUser(userId);
 
           setUser(res || null);
         } catch (error) {

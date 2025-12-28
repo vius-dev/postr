@@ -23,6 +23,7 @@ import { api } from '@/lib/api';
 import QuotedPost from '@/components/QuotedPost';
 import { Post } from '@/types/post';
 import { useEffect } from 'react';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
 
 const MAX_CHARACTERS = 280;
 
@@ -49,7 +50,7 @@ const ComposeScreen = () => {
     if (isEditing && postId) {
       const loadPostForEdit = async () => {
         try {
-          const post = await api.fetchPost(postId);
+          const post = await api.getPost(postId);
           if (post) {
             setOriginalPost(post);
             setText(post.content);
@@ -69,7 +70,7 @@ const ComposeScreen = () => {
     if (quotePostId) {
       const fetchQuotedPost = async () => {
         try {
-          const post = await api.fetchPost(quotePostId);
+          const post = await api.getPost(quotePostId);
           if (post) {
             setQuotedPost(post);
           }
@@ -115,12 +116,9 @@ const ComposeScreen = () => {
           media: media.map(m => ({ type: 'image', url: m.uri }))
         });
       } else {
-        // CREATE NEW POST
-        await api.createPost({
-          content: text,
-          quotedPostId: quotePostId || undefined,
-          media: media.map(m => ({ type: 'image', url: m.uri }))
-        });
+        // CREATE NEW POST (OFFLINE FIRST)
+        const mediaItems = media.map(m => ({ type: 'image' as const, url: m.uri }));
+        await SyncEngine.enqueuePost(text, mediaItems, quotePostId || undefined);
       }
       router.back();
     } catch (error: any) {

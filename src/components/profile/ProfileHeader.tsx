@@ -1,10 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { User } from '@/types/user';
+import { Media } from '@/types/post'; // Import Media type
 import { useTheme } from '@/theme/theme';
 import { isAuthorityActive, getVerificationLabel } from '@/utils/user';
+import ImageViewer from '@/components/ImageViewer'; // Import ImageViewer
 
 interface ProfileHeaderProps {
   user: User;
@@ -15,10 +17,30 @@ export default function ProfileHeader({ user, action }: ProfileHeaderProps) {
   const { theme } = useTheme();
   const showAuthority = isAuthorityActive(user);
 
+  const [isViewerVisible, setViewerVisible] = useState(false);
+  const [viewerImages, setViewerImages] = useState<Media[]>([]);
+
+  const handleImagePress = (imageUrl?: string) => {
+    if (imageUrl) {
+      setViewerImages([{ url: imageUrl, type: 'image' }]); // Construct Media object
+      setViewerVisible(true);
+    }
+  };
+
   return (
     <View style={[styles.container, { borderBottomColor: theme.borderLight, backgroundColor: theme.background }]}>
-      <Image source={{ uri: user.headerImage }} style={styles.headerImage} />
-      <Image source={{ uri: user.avatar }} style={[styles.avatar, { borderColor: theme.background }]} contentFit="cover" />
+      <TouchableOpacity onPress={() => handleImagePress(user.headerImage)} activeOpacity={0.9}>
+        <Image source={{ uri: user.headerImage }} style={styles.headerImage} contentFit="cover" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => handleImagePress(user.avatar)}
+        activeOpacity={0.9}
+        style={[styles.avatarContainer, { marginTop: -40, marginLeft: 15 }]} // Move margins to container
+      >
+        <Image source={{ uri: user.avatar }} style={[styles.avatar, { borderColor: theme.background }]} contentFit="cover" />
+      </TouchableOpacity>
+
       <View style={styles.userInfo}>
         <View style={styles.userDetails}>
           <View style={styles.nameRow}>
@@ -47,6 +69,13 @@ export default function ProfileHeader({ user, action }: ProfileHeaderProps) {
           {action}
         </View>
       </View>
+
+      <ImageViewer
+        visible={isViewerVisible}
+        images={viewerImages}
+        initialIndex={0}
+        onClose={() => setViewerVisible(false)}
+      />
     </View>
   );
 }
@@ -59,13 +88,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 150,
   },
+  avatarContainer: {
+    // Container for avatar touchable to handle positioning
+  },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
     borderWidth: 3,
-    marginTop: -40,
-    marginLeft: 15,
   },
   userInfo: {
     paddingHorizontal: 15,
