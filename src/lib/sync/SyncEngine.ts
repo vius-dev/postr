@@ -63,7 +63,10 @@ export const SyncEngine = {
 
         const db = await getDb();
         const user = await api.getCurrentUser();
-        if (!user) throw new Error('Auth required');
+        if (!user) {
+            console.error('[SyncEngine] toggleReaction: No user found');
+            return;
+        }
 
         // Ensure user exists locally for FK integrity
         await ensureLocalUser(db, user);
@@ -114,7 +117,10 @@ export const SyncEngine = {
     votePoll: async (postId: string, choiceIndex: number) => {
         const db = await getDb();
         const user = await api.getCurrentUser();
-        if (!user) throw new Error('Auth required');
+        if (!user) {
+            console.error('[SyncEngine] votePoll: No user found');
+            return;
+        }
 
         await ensureLocalUser(db, user);
 
@@ -143,6 +149,11 @@ export const SyncEngine = {
                             'UPDATE posts SET poll_json = ?, updated_at = ? WHERE id = ?',
                             [JSON.stringify(poll), now, postId]
                         );
+
+                        // FIX: Propagate to denormalized fields (quoted/reposted) to prevent multi-voting drift
+                        const json = JSON.stringify(poll);
+                        await db.runAsync('UPDATE posts SET quoted_poll_json = ? WHERE quoted_post_id = ?', [json, postId]);
+                        await db.runAsync('UPDATE posts SET reposted_poll_json = ? WHERE reposted_post_id = ?', [json, postId]);
                     }
                 } catch (e) {
                     console.error('[SyncEngine] Failed to update local poll_json', e);
@@ -158,7 +169,10 @@ export const SyncEngine = {
     toggleRepost: async (postId: string) => {
         const db = await getDb();
         const user = await api.getCurrentUser();
-        if (!user) throw new Error('Auth required');
+        if (!user) {
+            console.error('[SyncEngine] toggleRepost: No user found');
+            return;
+        }
 
         // Ensure user exists locally for FK integrity
         await ensureLocalUser(db, user);
@@ -194,6 +208,14 @@ export const SyncEngine = {
                     `, [localId, user.id, '', 'repost', postId, now, now]);
 
                     await db.runAsync('UPDATE posts SET repost_count = repost_count + 1 WHERE id = ?', [postId]);
+
+                    // Add to profile feed locally
+                    // FIX: Schema uses 'inserted_at' for feed_items, not 'created_at' (see FeedDeltaPhase/enqueuePost)
+                    // FIX: Must include user_id (NOT NULL constraint)
+                    await db.runAsync(`
+                        INSERT INTO feed_items (feed_type, user_id, post_id, rank_score, inserted_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    `, [`profile:${user.id}`, user.id, localId, now, now]);
                 }
             });
         } catch (err) {
@@ -207,7 +229,10 @@ export const SyncEngine = {
     toggleBookmark: async (postId: string) => {
         const db = await getDb();
         const user = await api.getCurrentUser();
-        if (!user) throw new Error('Auth required');
+        if (!user) {
+            console.error('[SyncEngine] toggleBookmark: No user found');
+            return;
+        }
 
         const now = Date.now();
 
@@ -360,8 +385,11 @@ export const SyncEngine = {
             const user = await api.getUser(username);
             if (!user) return;
 
-            const posts = await api.getProfilePosts(user.id);
+            // FIX: Persist the latest user profile to local DB immediately
             await db.withTransactionAsync(async () => {
+                await ensureLocalUser(db, user);
+
+                const posts = await api.getProfilePosts(user.id);
                 await db.runAsync("DELETE FROM feed_items WHERE feed_type = ? AND user_id = ?", [`profile:${user.id}`, currentUser.id]);
                 for (const post of posts) {
                     await upsertPost(db, post);

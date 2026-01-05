@@ -32,25 +32,25 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
   // Initialize comment state in context
   useEffect(() => {
     initializePost(initialComment.id, {
-      likes: initialComment.likeCount,
-      dislikes: initialComment.dislikeCount,
-      laughs: initialComment.laughCount,
-      reposts: initialComment.repostCount,
-      comments: initialComment.commentCount,
-      userReaction: initialComment.userReaction,
-      isReposted: initialComment.isReposted || false,
-      isBookmarked: initialComment.isBookmarked || false,
+      likes: initialComment.stats.likes,
+      dislikes: initialComment.stats.dislikes,
+      laughs: initialComment.stats.laughs,
+      reposts: initialComment.stats.reposts,
+      replies: initialComment.stats.replies,
+      userReaction: initialComment.viewer.reaction,
+      isReposted: initialComment.viewer.isReposted,
+      isBookmarked: initialComment.viewer.isBookmarked,
     });
   }, [initialComment.id]);
 
-  const reaction = userReactions[initialComment.id] || initialComment.userReaction;
-  const isReposted = userReposts[initialComment.id] ?? initialComment.isReposted;
+  const reaction = userReactions[initialComment.id] || initialComment.viewer.reaction;
+  const isReposted = userReposts[initialComment.id] ?? initialComment.viewer.isReposted;
   const currentCounts = counts[initialComment.id] || {
-    likes: initialComment.likeCount,
-    dislikes: initialComment.dislikeCount,
-    laughs: initialComment.laughCount,
-    reposts: initialComment.repostCount,
-    comments: initialComment.commentCount,
+    likes: initialComment.stats.likes,
+    dislikes: initialComment.stats.dislikes,
+    laughs: initialComment.stats.laughs,
+    reposts: initialComment.stats.reposts,
+    replies: initialComment.stats.replies,
   };
 
   const handleReaction = async (action: ReactionAction) => {
@@ -97,13 +97,15 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
         <Image source={{ uri: initialComment.author.avatar }} style={styles.avatar} />
       </TouchableOpacity>
       <View style={styles.contentContainer}>
-        <View style={styles.authorContainer}>
-          <TouchableOpacity onPress={goToProfile} activeOpacity={0.7} style={styles.authorInfo}>
-            <Text style={[styles.authorName, { color: theme.textPrimary }]}>{initialComment.author.name}</Text>
-            <Text style={[styles.authorUsername, { color: theme.textTertiary }]}>@{initialComment.author.username}</Text>
-          </TouchableOpacity>
-          <Text style={[styles.timestamp, { color: theme.textTertiary }]}>{timeAgo(initialComment.createdAt)}</Text>
-        </View>
+        {initialComment.author.username ? (
+          <View style={styles.authorContainer}>
+            <TouchableOpacity onPress={goToProfile} activeOpacity={0.7} style={styles.authorInfo}>
+              <Text style={[styles.authorName, { color: theme.textPrimary }]}>{initialComment.author.name}</Text>
+              <Text style={[styles.authorUsername, { color: theme.textTertiary }]}>@{initialComment.author.username}</Text>
+            </TouchableOpacity>
+            <Text style={[styles.timestamp, { color: theme.textTertiary }]}>· {timeAgo(initialComment.createdAt)}</Text>
+          </View>
+        ) : null}
         <TouchableOpacity onPress={goToPost} activeOpacity={0.9}>
           <Text style={[styles.content, { color: theme.textPrimary }]}>{initialComment.content}</Text>
         </TouchableOpacity>
@@ -117,12 +119,18 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
           onReaction={handleReaction}
           reaction={reaction}
           isReposted={isReposted}
-          initialCounts={currentCounts}
+          initialCounts={{
+            likes: currentCounts.likes,
+            dislikes: currentCounts.dislikes,
+            laughs: currentCounts.laughs,
+            reposts: currentCounts.reposts,
+            comments: currentCounts.replies
+          }}
         />
-        {currentCounts.comments > 0 && (
+        {currentCounts.replies > 0 && (
           <TouchableOpacity onPress={goToPost} style={styles.viewRepliesContainer}>
             <Text style={[styles.viewRepliesText, { color: theme.link }]}>
-              View {currentCounts.comments} {currentCounts.comments === 1 ? 'reply' : 'replies'}
+              View {currentCounts.replies} {currentCounts.replies === 1 ? 'reply' : 'replies'}
             </Text>
           </TouchableOpacity>
         )}

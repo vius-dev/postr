@@ -60,7 +60,35 @@ const SettingsScreen = () => {
     const { theme } = useTheme();
     const router = useRouter();
     const logout = useAuthStore(state => state.logout);
-    const user = useAuthStore(state => state.user);
+    const authUser = useAuthStore(state => state.user);
+    const [user, setUser] = React.useState(authUser);
+
+    React.useEffect(() => {
+        const loadUser = async () => {
+            if (authUser?.id) {
+                try {
+                    const { getDb } = require('@/lib/db/sqlite');
+                    const db = await getDb();
+                    const localUser: any = await db.getFirstAsync(
+                        'SELECT * FROM users WHERE id = ?',
+                        [authUser.id]
+                    );
+                    if (localUser) {
+                        setUser({
+                            id: localUser.id,
+                            username: localUser.username,
+                            name: localUser.display_name,
+                            avatar: localUser.avatar_url,
+                            // Map other fields as needed for display
+                        } as any);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load local user for settings', e);
+                }
+            }
+        };
+        loadUser();
+    }, [authUser?.id]);
 
     const handleLogout = () => {
         Alert.alert(

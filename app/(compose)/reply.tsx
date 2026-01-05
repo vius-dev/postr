@@ -20,13 +20,14 @@ import { useTheme } from '@/theme/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import MediaGrid from '@/components/MediaGrid';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
 
 const MAX_CHARACTERS = 280;
 
 const ReplyComposerScreen = () => {
   const { theme } = useTheme();
   const router = useRouter();
-  const { authorUsername } = useLocalSearchParams();
+  const { authorUsername, postId } = useLocalSearchParams();
   const [text, setText] = useState('');
   const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([]);
 
@@ -49,8 +50,16 @@ const ReplyComposerScreen = () => {
     }
   };
 
-  const handleReply = () => {
-    router.back();
+  const handleReply = async () => {
+    if (isReplyButtonDisabled) return;
+    try {
+      const mediaItems = media.map(m => ({ type: 'image' as const, url: m.uri }));
+      await SyncEngine.enqueuePost(text, mediaItems, undefined, postId as string);
+      router.back();
+    } catch (error) {
+      console.error('[Reply] Submission failed:', error);
+      Alert.alert('Error', 'Failed to queue reply. Please try again.');
+    }
   };
 
   const handlePickImage = async () => {

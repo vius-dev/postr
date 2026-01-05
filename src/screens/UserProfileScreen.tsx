@@ -18,6 +18,8 @@ import PostCard from '@/components/PostCard';
 import { eventEmitter } from '@/lib/EventEmitter';
 import { getDb } from '@/lib/db/sqlite';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
+import { isSelf } from '@/state/auth';
+import { PostPipeline } from '@/domain/post/post.pipeline';
 
 
 export default function UserProfileScreen() {
@@ -76,41 +78,44 @@ export default function UserProfileScreen() {
             SELECT
               p.*,
               u.username, u.display_name, u.avatar_url, u.verified as is_verified,
-              r.reaction_type as my_reaction
+              r.reaction_type as my_reaction,
+              qp.id as inner_quoted_post_id, qp.content as quoted_content, qp.type as quoted_type,
+              qp.created_at as quoted_created_at, qp.updated_at as quoted_updated_at,
+              qp.media_json as quoted_media_json, qp.poll_json as quoted_poll_json, qp.like_count as quoted_like_count,
+              qp.reply_count as quoted_reply_count, qp.repost_count as quoted_repost_count,
+              qu.id as quoted_author_id, qu.username as quoted_author_username,
+              qu.display_name as quoted_author_name, qu.avatar_url as quoted_author_avatar,
+              qu.verified as quoted_author_verified,
+              rp.id as inner_reposted_post_id, rp.content as reposted_content, rp.type as reposted_type,
+              rp.created_at as reposted_created_at, rp.updated_at as reposted_updated_at,
+              rp.media_json as reposted_media_json, rp.poll_json as reposted_poll_json, rp.like_count as reposted_like_count,
+              rp.reply_count as reposted_reply_count, rp.repost_count as reposted_repost_count,
+              ru.id as reposted_author_id, ru.username as reposted_author_username,
+              ru.display_name as reposted_author_name, ru.avatar_url as reposted_author_avatar,
+              ru.verified as reposted_author_verified,
+              pv.choice_index as user_vote_index
             FROM feed_items f
             JOIN posts p ON f.post_id = p.id
             JOIN users u ON p.owner_id = u.id
             LEFT JOIN reactions r ON p.id = r.post_id AND r.user_id = ?
+            LEFT JOIN poll_votes pv ON p.id = pv.post_id AND pv.user_id = ?
+            LEFT JOIN posts qp ON p.quoted_post_id = qp.id AND qp.deleted = 0
+            LEFT JOIN users qu ON qp.owner_id = qu.id
+            LEFT JOIN posts rp ON p.reposted_post_id = rp.id AND rp.deleted = 0
+            LEFT JOIN users ru ON rp.owner_id = ru.id
             WHERE f.feed_type = ?
             ORDER BY f.rank_score DESC
           `;
-          const rows = await db.getAllAsync(postsQuery, [currentUser?.id || '', `profile:${localUser.id}`]) as any[];
+          const rows = await db.getAllAsync(postsQuery, [currentUser?.id || '', currentUser?.id || '', `profile:${localUser.id}`]) as any[];
 
-          const mappedPosts: Post[] = rows.map((row: any) => ({
-            id: row.id,
-            content: row.content,
-            type: row.type || 'original',
-            createdAt: new Date(row.created_at).toISOString(),
-            updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
-            author: {
-              id: row.owner_id,
-              username: row.username,
-              name: row.display_name,
-              avatar: row.avatar_url,
-              is_verified: !!row.is_verified,
-              is_suspended: false,
-              is_shadow_banned: false,
-              is_limited: false,
-            },
-            media: row.media_json ? JSON.parse(row.media_json) : [],
-            likeCount: row.like_count || 0,
-            commentCount: row.reply_count || 0,
-            repostCount: row.repost_count || 0,
-            dislikeCount: 0,
-            laughCount: 0,
-            userReaction: row.my_reaction || 'NONE',
-            isBookmarked: false,
-          }));
+          const ctx = {
+            viewerId: currentUser?.id || null,
+            now: new Date().toISOString()
+          };
+
+          const mappedPosts: Post[] = rows.map((row: any) =>
+            PostPipeline.map(PostPipeline.adapt(row), ctx)
+          );
           setPosts(mappedPosts);
           if (!silent) setLoading(false);
         } else {
@@ -324,7 +329,7 @@ export default function UserProfileScreen() {
         <ProfileHeader
           user={user}
           action={
-            (relationship || (user.id === currentUser?.id)) && (
+            (relationship || isSelf(user.id)) && (
               <ProfileActionRow
                 relationship={relationship || { type: 'SELF', targetUserId: user.id }}
                 onFollow={handleFollow}
@@ -350,7 +355,7 @@ export default function UserProfileScreen() {
       />}
       <ProfileTabs
         selectedTab={selectedTab}
-        isOwner={user?.id === currentUser?.id}
+        isOwner={isSelf(user?.id || '')}
         onSelectTab={(tab) => {
           if (tab === 'Shop') {
             router.push('/(tabs)/shop');
@@ -377,7 +382,7 @@ export default function UserProfileScreen() {
   const renderUserItem = ({ item }: { item: User }) => (
     <TouchableOpacity
       style={[styles.userItem, { borderBottomColor: theme.borderLight }]}
-      onPress={() => router.push(`/(profile)/${item.username}`)}
+      onPress={() => router.push(`/ (profile) / ${item.username}`)}
     >
       <Image source={{ uri: item.avatar }} style={styles.listAvatar} />
       <View style={styles.userInfo}>

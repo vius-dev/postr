@@ -1,16 +1,45 @@
-
-// src/api/files.ts
+import { supabase } from '@/lib/supabase';
+import { File } from 'expo-file-system';
 
 /**
- * Uploads a file to Supabase storage or a target CDN.
- * This is currently a stub that returns a placeholder image.
+ * Uploads a file to Supabase storage.
+ * @param uri Local file URI
+ * @param bucket Storage bucket name (default: 'media')
+ * @returns Public URL of the uploaded file
  */
-export const uploadFile = async (file: any): Promise<string> => {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
+export const uploadFile = async (uri: string, bucket: string = 'media'): Promise<string> => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
 
-  // NOTE: In production, use supabase.storage.from('bucket').upload()
-  // For now, we return a reliable placeholder service
-  const randomId = Math.floor(Math.random() * 1000);
-  return `https://images.unsplash.com/photo-${randomId}?auto=format&fit=crop&w=800&q=80`;
+    // 1. Read file using new FileSystem API
+    // 'file://' prefix is handled by the URL class or the File class in the new API usually.
+    // However, if the uri comes from image picker it has 'file://'.
+    const file = new File(uri);
+    const bytes = await file.bytes();
+
+    // 2. Generate unique path
+    const ext = uri.split('.').pop() || 'jpg';
+    const filename = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+    // 3. Upload
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(filename, bytes, {
+        contentType: `image/${ext}`,
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // 4. Get Public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filename);
+
+    return publicUrl;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
 };

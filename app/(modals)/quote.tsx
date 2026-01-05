@@ -4,6 +4,7 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity, KeyboardAvoidingVi
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api } from '@/lib/api';
+import { SyncEngine } from '@/lib/sync/SyncEngine';
 import { useTheme } from '@/theme/theme';
 import PollView from '@/components/PollView';
 
@@ -37,10 +38,11 @@ export default function QuoteScreen() {
     if (text.length === 0) return;
 
     try {
-      await api.quote(id as string, text);
+      // Use SyncEngine for offline-first queuing
+      await SyncEngine.enqueuePost(text, [], id as string);
       router.back();
     } catch (error) {
-      console.error(error);
+      console.error('[Quote] Submission failed:', error);
     }
   };
 

@@ -126,20 +126,35 @@ const EditProfileScreen = () => {
 
     setIsSaving(true);
     try {
+      let avatarUrl = avatar;
+      let headerUrl = header;
+
+      // Upload Avatar if changed (local file)
+      if (avatar && avatar.startsWith('file://')) {
+        const { uploadFile } = await import('@/api/files');
+        avatarUrl = await uploadFile(avatar, 'avatars');
+      }
+
+      // Upload Header if changed (local file)
+      if (header && header.startsWith('file://')) {
+        const { uploadFile } = await import('@/api/files');
+        headerUrl = await uploadFile(header, 'headers');
+      }
+
       await api.updateProfile({
         name: name.trim(),
         bio: bio.trim(),
         location: location.trim(),
         website: website.trim(),
-        avatar: avatar || undefined,
-        headerImage: header || undefined,
+        avatar: avatarUrl || undefined,
+        headerImage: headerUrl || undefined,
       });
       Alert.alert('Success', 'Profile updated successfully.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (error) {
       console.error('Failed to update profile', error);
-      Alert.alert('Error', 'Failed to update profile.');
+      Alert.alert('Error', 'Failed to update profile. ' + (error instanceof Error ? error.message : ''));
     } finally {
       setIsSaving(false);
     }

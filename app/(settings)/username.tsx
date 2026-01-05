@@ -31,10 +31,28 @@ export default function UsernameScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (currentUsername) {
-      setUsername(currentUsername);
-    }
-  }, [currentUsername]);
+    const loadLocalUser = async () => {
+      if (user?.id) {
+        try {
+          const { getDb } = require('@/lib/db/sqlite');
+          const db = await getDb();
+          const localUser: any = await db.getFirstAsync(
+            'SELECT username FROM users WHERE id = ?',
+            [user.id]
+          );
+          if (localUser && localUser.username) {
+            setUsername(localUser.username);
+          } else if (currentUsername) {
+            setUsername(currentUsername);
+          }
+        } catch (e) {
+          console.warn('Failed to load local username', e);
+          if (currentUsername) setUsername(currentUsername);
+        }
+      }
+    };
+    loadLocalUser();
+  }, [user?.id, currentUsername]);
 
   const handleSave = async () => {
     setIsLoading(true);

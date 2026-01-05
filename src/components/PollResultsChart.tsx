@@ -40,7 +40,7 @@ export default function PollResultsChart({ poll }: PollResultsChartProps) {
                                         styles.bar,
                                         {
                                             width: `${percentage}%`,
-                                            backgroundColor: choice.color || theme.primary
+                                            backgroundColor: choice.color || ['#1DA1F2', '#17BF63', '#FFAD1F', '#E0245E', '#794BC4'][index % 5]
                                         }
                                     ]}
                                 />

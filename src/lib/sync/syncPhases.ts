@@ -285,15 +285,44 @@ export const PollVotesPhase: SyncPhase = {
                 // api.votePoll will fail if post doesn't exist.
                 // Assuming post is synced by now.
 
-                await api.votePoll(vote.post_id, vote.choice_index);
+                const updated = await api.votePoll(vote.post_id, vote.choice_index);
 
-                await db.runAsync(
-                    'UPDATE poll_votes SET sync_status = "synced" WHERE post_id = ? AND user_id = ?',
-                    [vote.post_id, vote.user_id]
-                );
+                await db.withTransactionAsync(async () => {
+                    // Update the local post with authoritative server data (including potential total count fixes)
+                    await upsertPost(db, updated);
+
+                    await db.runAsync(
+                        'UPDATE poll_votes SET sync_status = "synced" WHERE post_id = ? AND user_id = ?',
+                        [vote.post_id, vote.user_id]
+                    );
+                });
             } catch (error: any) {
+                // Handle duplicate key error (already voted on server)
+                // Postgres error code 23505 is unique_violation
+                // Supabase might wrap this, so check for code '23505' or 'PGRST116' etc.
+                if (error?.code === '23505' || String(error?.details).includes('already exists')) {
+                    console.log(`[SyncPhases] Vote already exists on server for ${vote.post_id}. Marking as synced.`);
+
+                    await db.withTransactionAsync(async () => {
+                        // Fetch latest post state to ensure consistency
+                        try {
+                            const latest = await api.getPost(vote.post_id);
+                            if (latest) {
+                                await upsertPost(db, latest);
+                            }
+                        } catch (e) {
+                            console.warn('Failed to fetch latest post after duplicate vote fix', e);
+                        }
+
+                        await db.runAsync(
+                            'UPDATE poll_votes SET sync_status = "synced" WHERE post_id = ? AND user_id = ?',
+                            [vote.post_id, vote.user_id]
+                        );
+                    });
+                    continue;
+                }
+
                 console.error(`[SyncPhases] PollVotesPhase: Failed to sync vote for post ${vote.post_id}`, error);
-                // If invalid choice index (P0001), maybe retry later or log fatal?
             }
         }
     }

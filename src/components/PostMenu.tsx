@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable, Alert, Shar
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '@/types/post';
 import { api } from '@/lib/api';
-import { useAuthStore } from '@/state/auth';
+import { useAuthStore, isSelf } from '@/state/auth';
 import { useTheme } from '@/theme/theme';
 import { eventEmitter } from '@/lib/EventEmitter';
 import ReportModal from '@/components/modals/ReportModal';
@@ -179,7 +179,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
     );
   };
 
-  const isAuthor = user?.id === post.author.id;
+  const isAuthor = isSelf(post.author.id);
 
   return (
     <>
@@ -209,43 +209,47 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
               <Text style={[styles.optionText, { color: theme.textPrimary }]}>Share Post</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.option} onPress={handleFollow}>
-              <Ionicons
-                name={isFollowing ? "person-remove-outline" : "person-add-outline"}
-                size={22}
-                color={theme.textPrimary}
-              />
-              <Text style={[styles.optionText, { color: theme.textPrimary }]}>
-                {isFollowing ? `Unfollow @${post.author.username}` : `Follow @${post.author.username}`}
-              </Text>
-            </TouchableOpacity>
+            {!isAuthor && (
+              <>
+                <TouchableOpacity style={styles.option} onPress={handleFollow}>
+                  <Ionicons
+                    name={isFollowing ? "person-remove-outline" : "person-add-outline"}
+                    size={22}
+                    color={theme.textPrimary}
+                  />
+                  <Text style={[styles.optionText, { color: theme.textPrimary }]}>
+                    {isFollowing ? `Unfollow @${post.author.username}` : `Follow @${post.author.username}`}
+                  </Text>
+                </TouchableOpacity>
 
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-            <TouchableOpacity style={styles.option} onPress={handleMute}>
-              <Ionicons
-                name={isMuted ? "volume-high-outline" : "volume-mute-outline"}
-                size={22}
-                color={theme.textPrimary}
-              />
-              <Text style={[styles.optionText, { color: theme.textPrimary }]}>
-                {isMuted ? `Unmute @${post.author.username}` : `Mute @${post.author.username}`}
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.option} onPress={handleMute}>
+                  <Ionicons
+                    name={isMuted ? "volume-high-outline" : "volume-mute-outline"}
+                    size={22}
+                    color={theme.textPrimary}
+                  />
+                  <Text style={[styles.optionText, { color: theme.textPrimary }]}>
+                    {isMuted ? `Unmute @${post.author.username}` : `Mute @${post.author.username}`}
+                  </Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity style={styles.option} onPress={handleBlock}>
-              <Ionicons name="ban-outline" size={22} color={theme.error} />
-              <Text style={[styles.optionText, { color: theme.error }]}>
-                {isBlocked ? `Unblock @${post.author.username}` : `Block @${post.author.username}`}
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.option} onPress={handleBlock}>
+                  <Ionicons name="ban-outline" size={22} color={theme.error} />
+                  <Text style={[styles.optionText, { color: theme.error }]}>
+                    {isBlocked ? `Unblock @${post.author.username}` : `Block @${post.author.username}`}
+                  </Text>
+                </TouchableOpacity>
 
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-            <TouchableOpacity style={styles.option} onPress={openReportModal}>
-              <Ionicons name="flag-outline" size={22} color={theme.error} />
-              <Text style={[styles.optionText, { color: theme.error }]}>Report Post</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.option} onPress={openReportModal}>
+                  <Ionicons name="flag-outline" size={22} color={theme.error} />
+                  <Text style={[styles.optionText, { color: theme.error }]}>Report Post</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             {isAuthor && (
               <>
@@ -254,7 +258,7 @@ export default function PostMenu({ visible, onClose, post }: PostMenuProps) {
                 {/* Edit Post Option (only within 15 mins) */}
                 {(() => {
                   const EDIT_WINDOW = 15 * 60 * 1000;
-                  const canEdit = (Date.now() - new Date(post.createdAt).getTime()) < EDIT_WINDOW;
+                  const canEdit = post.type !== 'poll' && (Date.now() - new Date(post.createdAt).getTime()) < EDIT_WINDOW;
 
                   if (canEdit) {
                     return (

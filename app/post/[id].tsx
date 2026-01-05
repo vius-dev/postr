@@ -32,8 +32,9 @@ const PostDetailScreen = () => {
           const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
           const focalPost: ListItem = { ...res.post, itemType: 'focal' };
 
-          // Only show direct replies (non-recursive) to hide deeper threads 
-          const replies = (res.post.comments || []).map(comment => ({
+          // Replies are now potentially nested in post.comments if populated by API
+          // For now, api.getPostWithLineage returns post.comments
+          const replies = ((res.post as any).comments || []).map((comment: Comment) => ({
             ...comment,
             depth: 0,
             itemType: 'reply' as const,
@@ -52,7 +53,24 @@ const PostDetailScreen = () => {
       }
     };
 
+    const handlePostUpdated = () => {
+      // Reload the post to get the latest state (e.g. votes, replies)
+      api.getPostWithLineage(id as string).then((res: { post: Post, parents: Post[] } | null) => {
+        if (res) {
+          const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
+          const focalPost: ListItem = { ...res.post, itemType: 'focal' };
+          const replies = ((res.post as any).comments || []).map((comment: Comment) => ({
+            ...comment,
+            depth: 0,
+            itemType: 'reply' as const,
+          }));
+          setListData([...parents, focalPost, ...replies]);
+        }
+      });
+    };
+
     eventEmitter.on('postDeleted', handlePostDeleted);
+    eventEmitter.on('feedUpdated', handlePostUpdated);
 
     // Subscribe to real-time comments (direct replies only)
     const subscription = api.subscribeToPostComments(id as string, (newComment) => {
@@ -73,6 +91,7 @@ const PostDetailScreen = () => {
 
     return () => {
       eventEmitter.off('postDeleted', handlePostDeleted);
+      eventEmitter.off('feedUpdated', handlePostUpdated);
       subscription.unsubscribe();
     };
   }, [id, router]);

@@ -7,7 +7,7 @@ import { useRealtime } from '@/realtime/RealtimeContext';
 import GrinTearsIcon from '@/components/icons/GrinTearsIcon';
 import { useTheme } from '@/theme/theme';
 
-type ReactionAction = 'LIKE' | 'DISLIKE' | 'LAUGH' | 'NONE';
+import { ReactionAction } from '@/types/post';
 
 interface ReactionBarProps {
   postId: string;
@@ -45,7 +45,7 @@ export default function ReactionBar({
     dislikes: initialCounts.dislikes,
     laughs: initialCounts.laughs,
     reposts: initialCounts.reposts,
-    comments: initialCounts.comments,
+    replies: initialCounts.comments,
   };
 
   const iconColor = theme.textTertiary;
@@ -69,7 +69,7 @@ export default function ReactionBar({
     <View style={styles.container}>
       <TouchableOpacity onPress={() => handleInteraction('COMMENT', onComment)} style={styles.button}>
         <Ionicons name="chatbubble-outline" size={20} color={iconColor} />
-        {!hideCounts && <Text style={[styles.count, { color: iconColor }]}>{currentCounts.comments}</Text>}
+        {!hideCounts && <Text style={[styles.count, { color: iconColor }]}>{currentCounts.replies}</Text>}
       </TouchableOpacity>
       <TouchableOpacity onPress={() => handleInteraction('REPOST', onRepost)} style={styles.button}>
         <Ionicons name={isReposted ? "repeat" : "repeat-outline"} size={20} color={repostColor} />

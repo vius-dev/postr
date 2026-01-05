@@ -424,83 +424,84 @@ const MIGRATIONS: Migration[] = [
             `);
             console.log('[Database] Migration version 10 applied successfully.');
         }
+    },
+    {
+        version: 11,
+        up: async (db) => {
+            console.log('[Database] Applying migration version 11 (Cleanup)...');
+
+            // 1. Nuke Zombie Posts (again, to be safe)
+            await db.runAsync('DELETE FROM posts WHERE owner_id NOT IN (SELECT id FROM users)');
+
+            // 2. Nuke Orphaned Poll Votes (where post doesn't exist)
+            await db.runAsync('DELETE FROM poll_votes WHERE post_id NOT IN (SELECT id FROM posts)');
+
+            // 3. Nuke Orphaned Feed Items
+            await db.runAsync('DELETE FROM feed_items WHERE post_id NOT IN (SELECT id FROM posts)');
+
+            console.log('[Database] Migration version 11: Cleanup complete.');
+        }
     }
 ];
 
 export const initSystem = async () => {
-    // Phase 0/1: System Boot & Schema Assurance
     if (initPromise) {
         return initPromise;
     }
 
-    let resolveInit: () => void;
-    let rejectInit: (err: any) => void;
-    initPromise = new Promise((resolve, reject) => {
-        resolveInit = resolve;
-        rejectInit = reject;
-    });
+    initPromise = (async () => {
+        console.log('[Database] Starting System Initialization...');
 
-    console.log('[Database] Starting System Initialization (Phase 0/1)...');
-
-    try {
-        // 🔥 ONE-TIME NUKE: Delete the database to force migration v9 to run
-        // This will clean up zombie posts and fix FK constraints
-        // TODO: Remove this after confirming the fix works
-        console.log('[Database] 🔥 ONE-TIME NUKE: Deleting database to force fresh start...');
         try {
-            await SQLite.deleteDatabaseAsync('postr.db');
-            console.log('[Database] Database deleted successfully.');
-        } catch (deleteError) {
-            console.log('[Database] Database deletion skipped (may not exist):', deleteError);
-        }
+            const database = await SQLite.openDatabaseAsync('postr.db');
+            db = database;
 
-        const database = await SQLite.openDatabaseAsync('postr.db');
-        db = database;
+            // 1. Pre-migration settings
+            await database.runAsync('PRAGMA foreign_keys = OFF');
 
-        // 1. Pre-migration settings
-        await database.runAsync('PRAGMA foreign_keys = OFF')
+            // 2. Initialize migration tracker
+            await database.runAsync(`
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    applied_at INTEGER NOT NULL
+                )
+            `);
 
-        // 2. Initialize migration tracker
-        await database.runAsync(`
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                version INTEGER PRIMARY KEY,
-                applied_at INTEGER NOT NULL
-            )
-        `)
+            // 3. Fetch applied migrations
+            const appliedRows = await database.getAllAsync('SELECT version FROM schema_migrations') as { version: number }[];
+            const appliedSet = new Set(appliedRows.map(r => r.version));
 
-        // 3. Fetch applied migrations
-        const appliedRows = await database.getAllAsync('SELECT version FROM schema_migrations') as { version: number }[];
-        const appliedSet = new Set(appliedRows.map(r => r.version));
+            // 4. Run pending migrations
+            for (const migration of MIGRATIONS) {
+                if (appliedSet.has(migration.version)) continue;
 
-        // 4. Run pending migrations
-        for (const migration of MIGRATIONS) {
-            if (appliedSet.has(migration.version)) continue;
+                console.log(`[Database] Applying migration version ${migration.version}...`);
+                await migration.up(database);
 
-            console.log(`[Database] Applying migration version ${migration.version}...`);
-            await migration.up(database);
+                await database.runAsync(
+                    'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+                    [migration.version, Date.now()]
+                );
+                console.log(`[Database] Migration version ${migration.version} applied successfully.`);
+            }
 
-            await database.runAsync(
-                'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
-                [migration.version, Date.now()]
-            );
-            console.log(`[Database] Migration version ${migration.version} applied successfully.`);
-        }
-
-        console.log('[Database] System Initialization complete.');
-        resolveInit!();
-    } catch (error) {
-        console.error('[Database] System Initialization failed:', error);
-        rejectInit!(error);
-        throw error;
-    } finally {
-        if (db) {
-            try {
-                await db.runAsync('PRAGMA foreign_keys = ON')
-            } catch (e) {
-                console.warn('[Database] Failed to restore foreign keys', e);
+            console.log('[Database] System Initialization complete.');
+        } catch (error) {
+            console.error('[Database] System Initialization failed:', error);
+            initPromise = null; // Clear promise on failure to allow retry
+            throw error;
+        } finally {
+            if (db) {
+                try {
+                    await db.runAsync('PRAGMA foreign_keys = ON');
+                } catch (e) {
+                    console.warn('[Database] Failed to restore foreign keys', e);
+                }
             }
         }
-    }
+    })();
+
+    return initPromise;
 };
 
 export const bindUserDatabase = async (userId: string) => {

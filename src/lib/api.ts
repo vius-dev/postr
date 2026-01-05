@@ -1,12 +1,14 @@
 import { supabase } from './supabase';
+import { getDb } from './db/sqlite';
 import { Post, ReactionAction, Comment, Media } from "@/types/post";
 import { User, UserProfile, Session } from "@/types/user";
 import { Notification } from "@/types/notification";
 import { Conversation, Message } from "@/types/message";
 import { ViewerRelationship } from "@/components/profile/ProfileActionRow";
 import { generateId } from '@/utils/id';
+import { PostPipeline } from '@/domain/post/post.pipeline';
 
-// CONSTANTS
+// CONSTANTS:
 // -------------------------------------------------------------------------
 const DEFAULT_PAGE_SIZE = 20;
 const SEARCH_LIMIT = 20;
@@ -103,44 +105,13 @@ const generateSecureToken = (): string => {
 
 // MAPPING FUNCTIONS
 // -------------------------------------------------------------------------
-const mapPost = (row: any): Post | null => {
-  if (!row || !row.author) return null;
-  return {
-    id: row.id,
-    author: row.author,
-    content: row.content,
-    type: row.type || 'original',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    media: row.media,
-    likeCount: row.reaction_counts?.like_count || 0,
-    dislikeCount: row.reaction_counts?.dislike_count || 0,
-    laughCount: row.reaction_counts?.laugh_count || 0,
-    repostCount: row.reaction_counts?.repost_count || 0,
-    commentCount: row.reaction_counts?.comment_count || 0,
-    userReaction: 'NONE',
-    isBookmarked: false,
-    visibility: row.visibility || 'public',
-    parentPostId: row.parent_id,
-    quotedPostId: row.quoted_post_id,
-    repostedPostId: row.reposted_post_id,
-    quotedPost: (row.quoted_post && !row.quoted_post.deleted_at) ? mapPost(row.quoted_post) || undefined : undefined,
-    repostedPost: (row.reposted_post && !row.reposted_post.deleted_at) ? mapPost(row.reposted_post) || undefined : undefined,
-    poll: (() => {
-      const p = row.poll || (row.poll_json ? (typeof row.poll_json === 'string' ? JSON.parse(row.poll_json) : row.poll_json) : undefined);
-      if (!p || !p.choices) return undefined;
-      return {
-        question: p.question,
-        choices: p.choices.map((c: any) => ({
-          text: c.text || c.label,
-          color: c.color,
-          vote_count: c.vote_count || 0
-        })),
-        totalVotes: p.totalVotes || p.total_votes || p.choices.reduce((s: number, c: any) => s + (c.vote_count || 0), 0),
-        expiresAt: p.expiresAt || p.expires_at || p.closes_at
-      };
-    })()
-  } as Post;
+const mapPost = (row: any, viewerId?: string | null): Post | null => {
+  if (!row) return null;
+  const raw = PostPipeline.adapt(row);
+  return PostPipeline.map(raw, {
+    viewerId: viewerId || null,
+    now: new Date().toISOString()
+  });
 };
 
 const mapProfile = (row: any): User | null => {
@@ -180,7 +151,7 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
   const postIds = posts.map(p => p.id);
 
   try {
-    const [reactions, bookmarks] = await Promise.all([
+    const [reactions, bookmarks, pollVotes] = await Promise.all([
       supabase
         .from('post_reactions')
         .select('subject_id, type')
@@ -190,17 +161,81 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
         .from('bookmarks')
         .select('post_id')
         .eq('user_id', user.id)
+        .in('post_id', postIds),
+      supabase
+        .from('poll_votes')
+        .select('post_id, choice_index')
+        .eq('user_id', user.id)
         .in('post_id', postIds)
     ]);
+
+    // OPTIMISTIC VOTE MERGE: Check local DB for pending votes
+    let localVotes: any[] = [];
+    try {
+      const db = await getDb();
+      if (postIds.length > 0) {
+        const placeholders = postIds.map(() => '?').join(',');
+        localVotes = await db.getAllAsync(
+          `SELECT post_id, choice_index FROM poll_votes WHERE user_id = ? AND post_id IN (${placeholders})`,
+          [user.id, ...postIds]
+        );
+      }
+    } catch (e) {
+      console.warn('Failed to fetch local votes for hydration', e);
+    }
 
     const reactionMap = new Map(reactions.data?.map((r: any) => [r.subject_id, r.type]) || []);
     const bookmarkSet = new Set(bookmarks.data?.map((b: any) => b.post_id) || []);
 
-    return posts.map(p => ({
-      ...p,
-      userReaction: (reactionMap.get(p.id) as ReactionAction) || 'NONE',
-      isBookmarked: bookmarkSet.has(p.id)
-    }));
+    // Server votes (assumed to be reflected in the post's poll_json counts already if synced)
+    const serverVoteMap = new Map(pollVotes.data?.map((v: any) => [v.post_id, v.choice_index]) || []);
+
+    // Local votes (pending, might not be in server counts)
+    const localVoteMap = new Map();
+    localVotes.forEach((v: any) => {
+      localVoteMap.set(v.post_id, v.choice_index);
+    });
+
+    return posts.map(p => {
+      // Determine vote index: Local takes precedence
+      const localIdx = localVoteMap.get(p.id);
+      const serverIdx = serverVoteMap.get(p.id);
+      const userVoteIndex = localIdx !== undefined ? localIdx : serverIdx;
+
+      // If we have a local vote that IS NOT on the server, we assume the server count 
+      // doesn't include it yet, so we speculatively increment.
+      const isPendingLocalVote = localIdx !== undefined && serverIdx === undefined;
+
+      let poll = p.poll;
+      if (poll && userVoteIndex !== undefined) {
+        poll = { ...poll, userVoteIndex };
+
+        if (isPendingLocalVote && poll.choices && poll.choices[userVoteIndex]) {
+          // Clone choices to avoid mutating original ref if shared
+          const newChoices = [...poll.choices];
+          const choice = { ...newChoices[userVoteIndex] };
+          choice.vote_count = (choice.vote_count || 0) + 1;
+          newChoices[userVoteIndex] = choice;
+
+          poll.choices = newChoices;
+          poll.totalVotes = (poll.totalVotes || 0) + 1;
+        }
+      }
+
+      return {
+        ...p,
+        viewer: {
+          ...p.viewer,
+          reaction: (reactionMap.get(p.id) as ReactionAction) || 'NONE',
+          hasLiked: reactionMap.get(p.id) === 'LIKE',
+          hasDisliked: reactionMap.get(p.id) === 'DISLIKE',
+          hasLaughed: reactionMap.get(p.id) === 'LAUGH',
+          isBookmarked: bookmarkSet.has(p.id),
+          userVoteIndex
+        },
+        poll
+      };
+    });
   } catch (error) {
     console.error('Error hydrating posts:', error);
     return posts;
@@ -274,17 +309,45 @@ export const api = {
     if (error) throw error;
   },
 
+  getUserId: async (): Promise<string | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  },
+
   getCurrentUser: async (): Promise<User | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return null;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    // Use cached profile if possible, or attempt local session metadata
+    // For now, we attempt a quick fetch but catch error for offline
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-    return mapProfile(profile);
+      if (error || !profile) {
+        // Return minimal profile from session metadata if offline
+        return {
+          id: user.id,
+          username: user.user_metadata?.username || 'user',
+          name: user.user_metadata?.name || 'User',
+          avatar: user.user_metadata?.avatar || `https://i.pravatar.cc/150?u=${user.id}`,
+        } as User;
+      }
+
+      return mapProfile(profile);
+    } catch (e) {
+      console.warn('[API] Offline: Using session metadata for user profile');
+      return {
+        id: user.id,
+        username: user.user_metadata?.username || 'user',
+        name: user.user_metadata?.name || 'User',
+        avatar: user.user_metadata?.avatar || `https://i.pravatar.cc/150?u=${user.id}`,
+      } as User;
+    }
   },
 
   ensureProfileExists: async (authUser: any): Promise<void> => {
@@ -365,8 +428,11 @@ export const api = {
     const { data, error } = await query;
     if (error) throw error;
 
+    const user = await api.getCurrentUser();
+    const userId = user?.id || null;
+
     const posts = await hydratePosts(
-      data.map(mapPost).filter((p): p is Post => p !== null)
+      data.map(row => mapPost(row, userId)).filter((p): p is Post => p !== null)
     );
     const hasMore = posts.length === limit;
 
@@ -404,8 +470,11 @@ export const api = {
 
     console.log(`[API] getDeltaFeed: ${upsertsData.length} upserts, ${deletionsData.length} deletions`);
 
+    const user = await api.getCurrentUser();
+    const userId = user?.id || null;
+
     const upserts = await hydratePosts(
-      upsertsData.map(mapPost).filter((p): p is Post => p !== null)
+      upsertsData.map(row => mapPost(row, userId)).filter((p): p is Post => p !== null)
     );
 
     const deletedIds = deletionsData.map((r: any) => r.id);
@@ -517,6 +586,12 @@ export const api = {
   },
 
   updatePost: async (postId: string, content: string): Promise<void> => {
+    // Polls are immutable
+    const post = await api.getPost(postId);
+    if (post?.type === 'poll') {
+      throw new Error('Polls are not mutable');
+    }
+
     validateContent(content);
 
     const { error } = await supabase
@@ -528,6 +603,46 @@ export const api = {
   },
 
   getPost: async (postId: string): Promise<Post | null> => {
+    const user = await api.getCurrentUser();
+    const userId = user?.id || null;
+
+    // 1. Try Local First
+    try {
+      const db = await getDb();
+      const localPost: any = await db.getFirstAsync(`
+            SELECT
+                p.*,
+                u.username, u.display_name, u.avatar_url, u.verified as is_verified,
+                r.reaction_type as my_reaction,
+                pv.choice_index as user_vote_index,
+                CASE WHEN b.post_id IS NOT NULL THEN 1 ELSE 0 END as is_bookmarked
+            FROM posts p
+            LEFT JOIN users u ON p.owner_id = u.id
+            LEFT JOIN reactions r ON p.id = r.post_id AND r.user_id = ?
+            LEFT JOIN poll_votes pv ON p.id = pv.post_id AND pv.user_id = ?
+            LEFT JOIN bookmarks b ON p.id = b.post_id AND b.user_id = ?
+            WHERE p.id = ? AND p.deleted = 0
+        `, [userId, userId, userId, postId]);
+
+      if (localPost) {
+        const ctx = {
+          viewerId: userId,
+          now: new Date().toISOString()
+        };
+        // Adapt and Map
+        const pipelinePost = PostPipeline.map(PostPipeline.adapt(localPost), ctx);
+        // Hydrate local post? Local post is usually already "hydrated" via joins, 
+        // BUT hydratePosts fetches EXTRA things like bookmark set if we passed array.
+        // However, pipelinePost already has correct viewer state from the SQL query above.
+        // So we can return it directly!
+        return pipelinePost;
+      }
+    } catch (e) {
+      // Fallback to network if local fails (optional, but good for robustness)
+      console.warn('Local getPost failed, falling back to network', e);
+    }
+
+    // 2. Fallback to Supabase
     const { data, error } = await supabase
       .from('posts')
       .select(POST_SELECT)
@@ -537,7 +652,7 @@ export const api = {
 
     if (error || !data) return null;
 
-    const mappedPost = mapPost(data);
+    const mappedPost = mapPost(data, userId);
     if (!mappedPost) return null;
     const hydrated = await hydratePosts([mappedPost]);
     return hydrated[0] || null;
@@ -548,7 +663,9 @@ export const api = {
     try {
       const { data, error } = await supabase.rpc('get_post_lineage', { post_id: postId });
       if (!error && data && data.length > 0) {
-        const posts = await hydratePosts(data.map(mapPost));
+        const userLineage = await api.getCurrentUser();
+        const userId = userLineage?.id || null;
+        const posts = await hydratePosts(data.map((row: any) => mapPost(row, userId)));
         const post = posts.find(p => p.id === postId);
         const parents = posts.filter(p => p.id !== postId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         return post ? { post, parents } : null;
@@ -722,8 +839,11 @@ export const api = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    const currentUser = await api.getCurrentUser();
+    const userId = currentUser?.id || null;
+
     return hydratePosts(
-      data.map((row: any) => mapPost(row.post)).filter((p): p is Post => p !== null)
+      data.map((row: any) => mapPost(row.post, userId)).filter((p): p is Post => p !== null)
     );
   },
 
@@ -1053,8 +1173,10 @@ export const api = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    const user = await api.getCurrentUser();
+    const currentUserId = user?.id || null;
     return hydratePosts(
-      data.map(mapPost).filter((p): p is Post => p !== null)
+      data.map(row => mapPost(row, currentUserId)).filter((p): p is Post => p !== null)
     );
   },
 
@@ -1068,8 +1190,10 @@ export const api = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    const user = await api.getCurrentUser();
+    const currentUserId = user?.id || null;
     return hydratePosts(
-      data.map(mapPost).filter((p): p is Post => p !== null)
+      data.map(row => mapPost(row, currentUserId)).filter((p): p is Post => p !== null)
     );
   },
 
@@ -1087,8 +1211,10 @@ export const api = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    const user = await api.getCurrentUser();
+    const currentUserId = user?.id || null;
     return hydratePosts(
-      data.map(mapPost).filter((p): p is Post => p !== null)
+      data.map(row => mapPost(row, currentUserId)).filter((p): p is Post => p !== null)
     );
   },
 
@@ -1109,8 +1235,10 @@ export const api = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    const user = await api.getCurrentUser();
+    const currentUserId = user?.id || null;
     return hydratePosts(
-      data.map((row: any) => mapPost(row.post)).filter((p): p is Post => p !== null)
+      data.map((row: any) => mapPost(row.post, currentUserId)).filter((p): p is Post => p !== null)
     );
   },
 
@@ -1202,6 +1330,7 @@ export const api = {
 
   muteUser: async (userId: string): Promise<void> => {
     const user = await getAuthenticatedUser();
+    if (user.id === userId) throw new Error('Cannot mute yourself');
     const { error } = await supabase.from('mutes').insert({ muter_id: user.id, muted_id: userId });
     if (error) throw error;
   },
@@ -1214,6 +1343,7 @@ export const api = {
 
   blockUser: async (userId: string): Promise<void> => {
     const user = await getAuthenticatedUser();
+    if (user.id === userId) throw new Error('Cannot block yourself');
     const { error } = await supabase.from('blocks').insert({ blocker_id: user.id, blocked_id: userId });
     if (error) throw error;
   },
@@ -1279,6 +1409,16 @@ export const api = {
   },
 
   createReport: async (entityType: string, entityId: string, reportType: string, reporterId: string, reason: string): Promise<void> => {
+    if (entityType === 'USER' && entityId === reporterId) {
+      throw new Error('Cannot report yourself');
+    }
+    if (entityType === 'POST' || entityType === 'COMMENT') {
+      const post = await api.getPost(entityId);
+      if (post?.author.id === reporterId) {
+        throw new Error('Cannot report your own content');
+      }
+    }
+
     validateContent(reason, 1000);
 
     const { error } = await supabase.from('reports').insert({
@@ -1466,8 +1606,10 @@ export const api = {
       .limit(SEARCH_LIMIT);
 
     if (error) throw error;
+    const user = await api.getCurrentUser();
+    const currentUserId = user?.id || null;
     return hydratePosts(
-      data.map(mapPost).filter((p): p is Post => p !== null)
+      data.map(row => mapPost(row, currentUserId)).filter((p): p is Post => p !== null)
     );
   },
 
@@ -1501,8 +1643,10 @@ export const api = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    const user = await api.getCurrentUser();
+    const currentUserId = user?.id || null;
     return hydratePosts(
-      data.map(mapPost).filter((p): p is Post => p !== null)
+      data.map(row => mapPost(row, currentUserId)).filter((p): p is Post => p !== null)
     );
   },
 

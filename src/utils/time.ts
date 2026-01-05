@@ -1,7 +1,13 @@
 
 export const timeAgo = (timestamp: string): string => {
+  if (!timestamp) return '';
   const now = new Date();
   const past = new Date(timestamp);
+
+  if (isNaN(past.getTime())) {
+    return ''; // Do not return "Invalid Date"
+  }
+
   const msPerMinute = 60 * 1000;
   const msPerHour = msPerMinute * 60;
   const msPerDay = msPerHour * 24;

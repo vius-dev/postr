@@ -33,52 +33,27 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
 
   const showAuthority = isAuthorityActive(post.author);
 
+  /*
   const {
     counts,
     userReactions,
     userReposts,
-    // initializePost, // No longer needed
-    // toggleReaction, // Replaced by SyncEngine
-    // toggleRepost // Replaced by SyncEngine
   } = useRealtime();
-
+  */
   const [isRepostModalVisible, setRepostModalVisible] = useState(false);
   const [isMenuVisible, setMenuVisible] = useState(false);
   const [isImageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
-  // Initialize post state in context
-  // Initialize post state in context - No longer needed for Offline First
-  /*
-  useEffect(() => {
-    initializePost(post.id, {
-      likes: post.likeCount,
-      dislikes: post.dislikeCount,
-      laughs: post.laughCount,
-      reposts: post.repostCount,
-      comments: post.commentCount,
-      userReaction: post.userReaction,
-      isReposted: post.isReposted || false,
-      isBookmarked: post.isBookmarked || false,
-    });
-  }, [post.id]);
-  */
-
-  const reaction = userReactions[post.id] || post.userReaction;
-  const isReposted = userReposts[post.id] ?? post.isReposted;
+  // For now, we rely on the Post object provided by the feed/API
+  // Realtime updates should ideally update the Post object in state/context
+  const reaction = post.viewer.reaction;
+  const isReposted = post.viewer.isReposted;
 
   // For reposts, the "displayPost" which contains the content, media, etc. is the original
   const displayPost = (post.type === 'repost' && post.repostedPost) ? post.repostedPost : post;
 
-  // Debug: Check if repost has the data
-  if (post.type === 'repost') {
-    console.log(`[PostCard] Repost ${post.id}:`, {
-      hasRepostedPost: !!post.repostedPost,
-      repostedPostId: post.repostedPostId,
-      displayPostId: displayPost.id,
-      displayPostContent: displayPost.content?.substring(0, 50)
-    });
-  }
+
 
   // CRITICAL FIX: Recursively resolve repost chains
   // If we're displaying a repost, and that repost is itself a repost, follow the chain
@@ -94,12 +69,12 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   // Use the final resolved post for display
   const resolvedDisplayPost = finalDisplayPost;
 
-  const currentCounts = counts[post.id] || {
-    likes: post.likeCount,
-    dislikes: post.dislikeCount,
-    laughs: post.laughCount,
-    reposts: post.repostCount,
-    comments: post.commentCount,
+  const currentCounts = {
+    likes: post.stats.likes,
+    dislikes: post.stats.dislikes,
+    laughs: post.stats.laughs,
+    reposts: post.stats.reposts,
+    comments: post.stats.replies, // replies is used for comments
   };
 
   const handleComment = () => {
@@ -151,21 +126,27 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
 
           <Card.Header>
             <View style={styles.authorContainer}>
-              <TouchableOpacity onPress={() => router.push(`/(profile)/${resolvedDisplayPost.author.username}`)} activeOpacity={0.7} style={styles.authorInfo}>
-                <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{resolvedDisplayPost.author.name}</Text>
-                {isAuthorityActive(resolvedDisplayPost.author) && (
-                  <Image source={{ uri: resolvedDisplayPost.author.official_logo }} style={styles.officialLogo} contentFit="contain" />
-                )}
-                {resolvedDisplayPost.author.is_verified && !isAuthorityActive(resolvedDisplayPost.author) && (
-                  <Ionicons name="checkmark-circle" size={14} color={theme.primary} style={styles.verifiedBadge} />
-                )}
-                <Text style={[styles.authorUsername, { color: theme.textTertiary }]} numberOfLines={1}>@{resolvedDisplayPost.author.username}</Text>
-                <Text style={[styles.timestamp, { color: theme.textTertiary }]} numberOfLines={1}>
-                  · {timeAgo(post.type === 'repost' || post.type === 'quote' ? post.createdAt : resolvedDisplayPost.createdAt)}
-                  {resolvedDisplayPost.updatedAt && resolvedDisplayPost.updatedAt !== resolvedDisplayPost.createdAt && post.type !== 'repost' && post.type !== 'quote' && ' · Edited'}
-                  {post.type === 'repost' && ' · Reposted'}
-                </Text>
-              </TouchableOpacity>
+              {resolvedDisplayPost.author.username ? (
+                <TouchableOpacity onPress={() => router.push(`/(profile)/${resolvedDisplayPost.author.username}`)} activeOpacity={0.7} style={styles.authorInfo}>
+                  <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{resolvedDisplayPost.author.name}</Text>
+                  {isAuthorityActive(resolvedDisplayPost.author) && (
+                    <Image source={{ uri: resolvedDisplayPost.author.official_logo }} style={styles.officialLogo} contentFit="contain" />
+                  )}
+                  {resolvedDisplayPost.author.is_verified && !isAuthorityActive(resolvedDisplayPost.author) && (
+                    <Ionicons name="checkmark-circle" size={14} color={theme.primary} style={styles.verifiedBadge} />
+                  )}
+                  <Text style={[styles.authorUsername, { color: theme.textTertiary }]} numberOfLines={1}>@{resolvedDisplayPost.author.username}</Text>
+                  <Text style={[styles.timestamp, { color: theme.textTertiary }]} numberOfLines={1}>
+                    · {timeAgo(post.type === 'repost' || post.type === 'quote' ? post.createdAt : resolvedDisplayPost.createdAt)}
+                    {resolvedDisplayPost.meta.isEdited &&
+                      resolvedDisplayPost.type !== 'poll' &&
+                      post.type !== 'repost' && post.type !== 'quote' && ` · ${resolvedDisplayPost.meta.editedLabel}`}
+                    {post.type === 'repost' && ' · Reposted'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
               <TouchableOpacity onPress={() => setMenuVisible(true)} style={styles.moreButton}>
                 <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
@@ -203,7 +184,12 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
             {isFocal ? (
               <View style={[styles.focalMetadata, { borderTopColor: theme.border, borderBottomColor: theme.border }]}>
                 <Text style={[styles.focalTime, { color: theme.textTertiary }]}>
-                  {new Date(post.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(post.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {(() => {
+                    const date = new Date(post.createdAt);
+                    return !isNaN(date.getTime())
+                      ? `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+                      : '';
+                  })()}
                 </Text>
                 <View style={[styles.focalStats, { borderTopColor: theme.border }]}>
                   <View style={styles.statItem}>

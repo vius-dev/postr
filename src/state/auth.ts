@@ -73,6 +73,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
+/**
+ * Standardized helper to check if a user ID belongs to the currently authenticated user.
+ */
+export const isSelf = (userId: string): boolean => {
+  const currentUser = useAuthStore.getState().user;
+  return !!currentUser && currentUser.id === userId;
+};
+
 
 supabase.auth.onAuthStateChange((_event: any, session: any) => {
   useAuthStore.getState().setSession(session);

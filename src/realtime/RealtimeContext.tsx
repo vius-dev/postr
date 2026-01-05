@@ -14,7 +14,7 @@ interface PostCounts {
   dislikes: number;
   laughs: number;
   reposts: number;
-  comments: number;
+  replies: number;
 }
 
 interface RealtimeState {
@@ -45,7 +45,7 @@ const DEFAULT_COUNTS: PostCounts = {
   dislikes: 0,
   laughs: 0,
   reposts: 0,
-  comments: 0,
+  replies: 0,
 };
 
 export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -93,7 +93,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
               dislikes: initial.dislikes,
               laughs: initial.laughs,
               reposts: initial.reposts,
-              comments: initial.comments,
+              replies: initial.replies,
             },
           },
           userReactions: {
@@ -275,7 +275,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const handleNewComment = ({ parentId }: { parentId: string }) => {
       setState(prev => {
-        const current = prev.counts[parentId]?.comments || 0;
+        const current = prev.counts[parentId]?.replies || 0;
         return {
           ...prev,
           counts: {
@@ -284,7 +284,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
               ...(prev.counts[parentId] || {
                 ...DEFAULT_COUNTS,
               }),
-              comments: current + 1,
+              replies: current + 1,
             },
           },
         };

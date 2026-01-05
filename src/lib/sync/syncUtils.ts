@@ -32,8 +32,12 @@ export const ensureLocalUser = async (db: SQLite.SQLiteDatabase, user: any) => {
  * Designed to be recursive and idempotent.
  */
 export const upsertPost = async (db: SQLite.SQLiteDatabase, post: Post, visited: Set<string> = new Set()) => {
-    if (!post.author) {
-        console.warn('[SyncUtils] Skipping post with missing author:', post.id);
+    if (!post.id) {
+        console.warn('[SyncUtils] upsertPost: Skipping post with missing ID');
+        return;
+    }
+    if (!post.author || !post.author.id) {
+        console.warn('[SyncUtils] upsertPost: Skipping post with missing author or author ID:', post.id);
         return;
     }
     if (visited.has(post.id)) return;
@@ -82,6 +86,26 @@ export const upsertPost = async (db: SQLite.SQLiteDatabase, post: Post, visited:
 
     // Upsert Post
     try {
+        // POLL METADATA MERGE: If local post has colors but server doesn't, preserve local colors
+        let finalPollJson = JSON.stringify(post.poll || null);
+        if (post.poll && post.poll.choices) {
+            const existingPost: any = await db.getFirstAsync('SELECT poll_json FROM posts WHERE id = ?', [post.id]);
+            if (existingPost?.poll_json) {
+                try {
+                    const localPoll = JSON.parse(existingPost.poll_json);
+                    if (localPoll?.choices) {
+                        const mergedChoices = post.poll.choices.map((c: any, i: number) => ({
+                            ...c,
+                            color: c.color || localPoll.choices[i]?.color
+                        }));
+                        finalPollJson = JSON.stringify({ ...post.poll, choices: mergedChoices });
+                    }
+                } catch (e) {
+                    console.warn('[SyncUtils] Failed to merge poll colors', e);
+                }
+            }
+        }
+
         await db.runAsync(`
             INSERT INTO posts (id, owner_id, content, media_json, poll_json, type, parent_id, quoted_post_id, reposted_post_id,
                              visibility, like_count, reply_count, repost_count, is_local, sync_status, deleted, created_at, updated_at)
@@ -89,12 +113,12 @@ export const upsertPost = async (db: SQLite.SQLiteDatabase, post: Post, visited:
             ON CONFLICT(id) DO UPDATE SET
                 content=excluded.content, media_json=excluded.media_json, poll_json=excluded.poll_json, like_count=excluded.like_count,
                 reply_count=excluded.reply_count, repost_count=excluded.repost_count, sync_status='synced', updated_at=excluded.updated_at
-        `, [post.id, post.author.id, post.content, JSON.stringify(post.media || []), JSON.stringify(post.poll || null), post.type, post.parentPostId || null,
-        post.quotedPostId || null, post.repostedPostId || null, post.visibility || 'public', post.likeCount || 0,
-        post.commentCount || 0, post.repostCount || 0, 0, 'synced', 0, new Date(post.createdAt).getTime(),
-        // Fix: If updatedAt is very close to createdAt (< 1s), force them to be identical
-        // This prevents "Edited" label from showing due to minor backend timestamp differences
-        Math.abs(new Date(post.updatedAt || post.createdAt).getTime() - new Date(post.createdAt).getTime()) < 1000
+        `, [post.id, post.author.id, post.content, JSON.stringify(post.media || []), finalPollJson, post.type, post.parentPostId || null,
+        post.quotedPostId || null, post.repostedPostId || null, post.meta.visibility || 'public', post.stats.likes || 0,
+        post.stats.replies || 0, post.stats.reposts || 0, 0, 'synced', 0, new Date(post.createdAt).getTime(),
+        // Fix: If updatedAt is very close to createdAt (< 60s), force them to be identical
+        // This prevents "Edited" label from showing due to minor backend timestamp differences or processing delays
+        Math.abs(new Date(post.updatedAt || post.createdAt).getTime() - new Date(post.createdAt).getTime()) < 60000
             ? new Date(post.createdAt).getTime()
             : new Date(post.updatedAt || post.createdAt).getTime()]);
 
