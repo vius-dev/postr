@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from
 
 import { useTheme } from '@/theme/theme';
 
-export type ProfileTab = 'Shop' | 'Posts' | 'Replies' | 'Media' | 'Dis/Likes' | 'Following' | 'Followers' | 'Bookmark';
+export type ProfileTab = 'Posts' | 'Replies' | 'Media' | 'Dis/Likes' | 'Following' | 'Followers' | 'Bookmark';
 
 interface ProfileTabsProps {
   selectedTab: ProfileTab;
@@ -11,12 +11,12 @@ interface ProfileTabsProps {
   isOwner?: boolean;
 }
 
-const tabs: ProfileTab[] = ['Replies', 'Media', 'Dis/Likes', 'Bookmark'];
+const tabs: ProfileTab[] = ['Posts', 'Replies', 'Media', 'Dis/Likes', 'Bookmark'];
 
 export default function ProfileTabs({ selectedTab, onSelectTab, isOwner }: ProfileTabsProps) {
   const { theme } = useTheme();
 
-  const activeTabs = isOwner ? [...tabs, 'Shop'] as ProfileTab[] : tabs;
+  const activeTabs = tabs;
 
   return (
     <View style={[styles.outerContainer, { borderBottomColor: theme.borderLight }]}>

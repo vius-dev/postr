@@ -363,11 +363,7 @@ export default function UserProfileScreen() {
         selectedTab={selectedTab}
         isOwner={isSelf(user?.id || '')}
         onSelectTab={(tab) => {
-          if (tab === 'Shop') {
-            router.push('/(tabs)/shop');
-          } else {
-            setSelectedTab(tab);
-          }
+          setSelectedTab(tab);
         }}
       />
     </View>
@@ -408,7 +404,6 @@ export default function UserProfileScreen() {
       case 'Dis/Likes': return reactions;
       case 'Bookmark': return bookmarks;
       case 'Posts': return posts;
-      case 'Shop': return [{ id: 'shop-placeholder', type: 'placeholder' }];
       default: return [];
     }
   };
@@ -416,14 +411,6 @@ export default function UserProfileScreen() {
   const renderItem = ({ item }: { item: any }) => {
     if (selectedTab === 'Following' || selectedTab === 'Followers') {
       return renderUserItem({ item });
-    }
-    if (selectedTab === 'Shop') {
-      return (
-        <View style={styles.shopPlaceholder}>
-          <Ionicons name="cart-outline" size={64} color={theme.textTertiary} />
-          <Text style={[styles.placeholderText, { color: theme.textSecondary }]}>Shop coming soon!</Text>
-        </View>
-      );
     }
     return <PostCard post={item} />;
   };
@@ -480,15 +467,5 @@ const styles = StyleSheet.create({
   },
   userBio: {
     fontSize: 14,
-  },
-  shopPlaceholder: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    marginTop: 10,
-    fontSize: 18,
-    textAlign: 'center',
   },
 });
