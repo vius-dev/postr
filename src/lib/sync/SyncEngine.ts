@@ -149,11 +149,6 @@ export const SyncEngine = {
                             'UPDATE posts SET poll_json = ?, updated_at = ? WHERE id = ?',
                             [JSON.stringify(poll), now, postId]
                         );
-
-                        // FIX: Propagate to denormalized fields (quoted/reposted) to prevent multi-voting drift
-                        const json = JSON.stringify(poll);
-                        await db.runAsync('UPDATE posts SET quoted_poll_json = ? WHERE quoted_post_id = ?', [json, postId]);
-                        await db.runAsync('UPDATE posts SET reposted_poll_json = ? WHERE reposted_post_id = ?', [json, postId]);
                     }
                 } catch (e) {
                     console.error('[SyncEngine] Failed to update local poll_json', e);

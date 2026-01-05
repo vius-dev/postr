@@ -114,7 +114,7 @@ function RootLayoutNav() {
                 <Stack.Screen name="notifications/settings" options={{ headerShown: false }} />
                 <Stack.Screen name="messages/settings" options={{ headerShown: false }} />
                 <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
-                <Stack.Screen name="post/[id]" options={{ title: 'Post' }} />
+                <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
                 <Stack.Screen
                   name="(compose)/compose"
                   options={{

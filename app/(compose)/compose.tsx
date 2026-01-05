@@ -145,16 +145,6 @@ const ComposeScreen = () => {
     setMedia(media.filter((item) => item.uri !== url));
   };
 
-  const MediaPreview = () => {
-    if (media.length === 0) return null;
-    return (
-      <MediaGrid
-        media={media.map(m => ({ type: 'image', url: m.uri }))}
-        onRemove={handleRemoveMedia}
-      />
-    );
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -179,7 +169,14 @@ const ComposeScreen = () => {
               Replying to <Text style={{ color: theme.link }}>@{authorUsername}</Text>
             </Text>
           )}
-          <MediaPreview />
+
+          {media.length > 0 && (
+            <MediaGrid
+              media={media.map(m => ({ type: 'image', url: m.uri }))}
+              onRemove={handleRemoveMedia}
+            />
+          )}
+
           <TextInput
             style={[styles.textInput, { color: theme.textPrimary }]}
             multiline

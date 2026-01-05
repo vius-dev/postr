@@ -614,6 +614,20 @@ export const api = {
                 p.*,
                 u.username, u.display_name, u.avatar_url, u.verified as is_verified,
                 r.reaction_type as my_reaction,
+                qp.id as inner_quoted_post_id, qp.content as quoted_content, qp.type as quoted_type,
+                qp.created_at as quoted_created_at, qp.updated_at as quoted_updated_at,
+                qp.media_json as quoted_media_json, qp.poll_json as quoted_poll_json, qp.like_count as quoted_like_count,
+                qp.reply_count as quoted_reply_count, qp.repost_count as quoted_repost_count,
+                qu.id as quoted_author_id, qu.username as quoted_author_username,
+                qu.display_name as quoted_author_name, qu.avatar_url as quoted_author_avatar,
+                qu.verified as quoted_author_verified,
+                rp.id as inner_reposted_post_id, rp.content as reposted_content, rp.type as reposted_type,
+                rp.created_at as reposted_created_at, rp.updated_at as reposted_updated_at,
+                rp.media_json as reposted_media_json, rp.poll_json as reposted_poll_json, rp.like_count as reposted_like_count,
+                rp.reply_count as reposted_reply_count, rp.repost_count as reposted_repost_count,
+                ru.id as reposted_author_id, ru.username as reposted_author_username,
+                ru.display_name as reposted_author_name, ru.avatar_url as reposted_author_avatar,
+                ru.verified as reposted_author_verified,
                 pv.choice_index as user_vote_index,
                 CASE WHEN b.post_id IS NOT NULL THEN 1 ELSE 0 END as is_bookmarked
             FROM posts p
@@ -621,6 +635,10 @@ export const api = {
             LEFT JOIN reactions r ON p.id = r.post_id AND r.user_id = ?
             LEFT JOIN poll_votes pv ON p.id = pv.post_id AND pv.user_id = ?
             LEFT JOIN bookmarks b ON p.id = b.post_id AND b.user_id = ?
+            LEFT JOIN posts qp ON p.quoted_post_id = qp.id AND qp.deleted = 0
+            LEFT JOIN users qu ON qp.owner_id = qu.id
+            LEFT JOIN posts rp ON p.reposted_post_id = rp.id AND rp.deleted = 0
+            LEFT JOIN users ru ON rp.owner_id = ru.id
             WHERE p.id = ? AND p.deleted = 0
         `, [userId, userId, userId, postId]);
 

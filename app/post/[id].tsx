@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import PostCard from '@/components/PostCard';
 import CommentCard from '@/components/CommentCard';
 import PollResultsChart from '@/components/PollResultsChart';
+import DetailHeader from '@/components/DetailHeader';
 import { Post, Comment } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import { eventEmitter } from '@/lib/EventEmitter';
@@ -131,22 +132,23 @@ const PostDetailScreen = () => {
 
   if (isLoading) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.centered, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
         <ActivityIndicator size="large" color={theme.primary} />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (listData.length === 0) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={[styles.centered, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
         <Text style={{ color: theme.textSecondary }}>Post not found.</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
+      <DetailHeader title="Post" />
       <FlatList
         data={listData}
         renderItem={renderItem}
