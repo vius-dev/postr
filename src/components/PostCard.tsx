@@ -83,7 +83,8 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
 
   const handleReaction = async (action: ReactionAction) => {
     try {
-      await SyncEngine.toggleReaction(post.id, action as 'LIKE' | 'REPOST');
+      if (action === 'NONE') return;
+      await SyncEngine.toggleReaction(post.id, action as any);
     } catch (error) {
       console.error('Failed to react', error);
     }

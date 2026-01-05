@@ -23,6 +23,7 @@ const POST_SELECT = `
   *,
   author:profiles!owner_id(*),
   media:post_media(*),
+  content_edited_at,
   reaction_counts:reaction_aggregates!subject_id(*),
   quoted_post:posts!quoted_post_id(
     *,
@@ -151,7 +152,7 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
   const postIds = posts.map(p => p.id);
 
   try {
-    const [reactions, bookmarks, pollVotes] = await Promise.all([
+    const [reactions, bookmarks, pollVotes, reposts] = await Promise.all([
       supabase
         .from('post_reactions')
         .select('subject_id, type')
@@ -166,7 +167,13 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
         .from('poll_votes')
         .select('post_id, choice_index')
         .eq('user_id', user.id)
-        .in('post_id', postIds)
+        .in('post_id', postIds),
+      supabase
+        .from('posts')
+        .select('reposted_post_id')
+        .eq('owner_id', user.id)
+        .eq('type', 'repost')
+        .in('reposted_post_id', postIds)
     ]);
 
     // OPTIMISTIC VOTE MERGE: Check local DB for pending votes
@@ -186,6 +193,23 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
 
     const reactionMap = new Map(reactions.data?.map((r: any) => [r.subject_id, r.type]) || []);
     const bookmarkSet = new Set(bookmarks.data?.map((b: any) => b.post_id) || []);
+    const serverRepostSet = new Set((reposts as any).data?.map((r: any) => r.reposted_post_id) || []);
+
+    // OPTIMISTIC SYNC: Check local DB for is_reposted flag
+    const localRepostSet = new Set<string>();
+    try {
+      const db = await getDb();
+      if (postIds.length > 0) {
+        const placeholders = postIds.map(() => '?').join(',');
+        const localIsReposted = await db.getAllAsync(
+          `SELECT id FROM posts WHERE is_reposted = 1 AND id IN (${placeholders})`,
+          postIds
+        ) as any[];
+        localIsReposted.forEach(r => localRepostSet.add(r.id));
+      }
+    } catch (e) {
+      console.warn('Failed to fetch local repost status', e);
+    }
 
     // Server votes (assumed to be reflected in the post's poll_json counts already if synced)
     const serverVoteMap = new Map(pollVotes.data?.map((v: any) => [v.post_id, v.choice_index]) || []);
@@ -231,6 +255,7 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
           hasDisliked: reactionMap.get(p.id) === 'DISLIKE',
           hasLaughed: reactionMap.get(p.id) === 'LAUGH',
           isBookmarked: bookmarkSet.has(p.id),
+          isReposted: serverRepostSet.has(p.id) || localRepostSet.has(p.id) || reactionMap.get(p.id) === 'REPOST',
           userVoteIndex
         },
         poll
@@ -596,7 +621,11 @@ export const api = {
 
     const { error } = await supabase
       .from('posts')
-      .update({ content, updated_at: new Date().toISOString() })
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+        content_edited_at: new Date().toISOString()
+      })
       .eq('id', postId);
 
     if (error) throw error;
@@ -616,6 +645,7 @@ export const api = {
                 r.reaction_type as my_reaction,
                 qp.id as inner_quoted_post_id, qp.content as quoted_content, qp.type as quoted_type,
                 qp.created_at as quoted_created_at, qp.updated_at as quoted_updated_at,
+                qp.content_edited_at as quoted_content_edited_at,
                 qp.media_json as quoted_media_json, qp.poll_json as quoted_poll_json, qp.like_count as quoted_like_count,
                 qp.reply_count as quoted_reply_count, qp.repost_count as quoted_repost_count,
                 qu.id as quoted_author_id, qu.username as quoted_author_username,
@@ -623,6 +653,7 @@ export const api = {
                 qu.verified as quoted_author_verified,
                 rp.id as inner_reposted_post_id, rp.content as reposted_content, rp.type as reposted_type,
                 rp.created_at as reposted_created_at, rp.updated_at as reposted_updated_at,
+                rp.content_edited_at as reposted_content_edited_at,
                 rp.media_json as reposted_media_json, rp.poll_json as reposted_poll_json, rp.like_count as reposted_like_count,
                 rp.reply_count as reposted_reply_count, rp.repost_count as reposted_repost_count,
                 ru.id as reposted_author_id, ru.username as reposted_author_username,

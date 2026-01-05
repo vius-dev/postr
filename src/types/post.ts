@@ -50,12 +50,16 @@ export type Post = {
   type: 'original' | 'repost' | 'quote' | 'reply' | 'poll';
   createdAt: string;
   updatedAt?: string;
+  content_edited_at?: string;
 
   author: Author;
 
   viewer: {
     isSelf: boolean;
     reaction: ReactionAction;
+    hasLiked: boolean;
+    hasDisliked: boolean;
+    hasLaughed: boolean;
     isBookmarked: boolean;
     isReposted: boolean;
     userVoteIndex?: number | null;

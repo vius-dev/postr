@@ -67,6 +67,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                 type: source.type || 'original',
                 created_at: source.created_at,
                 updated_at: source.updated_at,
+                content_edited_at: source.content_edited_at,
                 media: source.media_json ? JSON.parse(source.media_json) : [],
                 poll: source.poll_json,
                 counts: {
@@ -79,6 +80,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                 viewer_state: {
                     my_reaction: source.my_reaction || 'NONE',
                     is_bookmarked: !!source.is_bookmarked,
+                    is_reposted: !!source.is_reposted,
                     user_vote_index: source.user_vote_index,
                 },
                 parent_id: source.parent_id,
@@ -98,6 +100,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     type: source.quoted_type || 'original',
                     created_at: source.quoted_created_at,
                     updated_at: source.quoted_updated_at,
+                    content_edited_at: source.quoted_content_edited_at,
                     media: source.quoted_media_json ? JSON.parse(source.quoted_media_json) : [],
                     poll: source.quoted_poll_json,
                     counts: {
@@ -110,6 +113,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     viewer_state: {
                         my_reaction: 'NONE',
                         is_bookmarked: false,
+                        is_reposted: false,
                     }
                 } : null,
                 reposted_post: repostedId ? {
@@ -125,6 +129,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     type: source.reposted_type || 'original',
                     created_at: source.reposted_created_at,
                     updated_at: source.reposted_updated_at,
+                    content_edited_at: source.reposted_content_edited_at,
                     media: source.reposted_media_json ? JSON.parse(source.reposted_media_json) : [],
                     poll: source.reposted_poll_json,
                     counts: {
@@ -137,6 +142,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     viewer_state: {
                         my_reaction: 'NONE',
                         is_bookmarked: false,
+                        is_reposted: false,
                     }
                 } : null,
             };
@@ -155,6 +161,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                 type: source.type || 'original',
                 created_at: source.created_at,
                 updated_at: source.updated_at,
+                content_edited_at: source.content_edited_at,
                 media: source.media || [],
                 poll: source.poll || source.poll_json,
                 counts: {
@@ -165,9 +172,10 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     replies: source.reaction_counts?.comment_count || source.commentCount || 0,
                 },
                 viewer_state: {
-                    my_reaction: source.userReaction || 'NONE',
-                    is_bookmarked: !!source.isBookmarked,
-                    user_vote_index: source.poll?.userVoteIndex,
+                    my_reaction: source.userReaction || source.viewer?.reaction || 'NONE',
+                    is_bookmarked: !!source.isBookmarked || !!source.viewer?.isBookmarked,
+                    is_reposted: !!source.isReposted || !!source.viewer?.isReposted,
+                    user_vote_index: source.poll?.userVoteIndex || source.viewer?.userVoteIndex,
                 },
                 parent_id: source.parent_id || source.parentPostId,
                 quoted_post_id: source.quoted_post_id || source.quotedPostId,
@@ -191,8 +199,15 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
         const createdTime = isNaN(createdDate.getTime()) ? Date.now() : createdDate.getTime();
         const updatedTime = isNaN(updatedDate.getTime()) ? createdTime : updatedDate.getTime();
 
-        // Fix: Allow 60s processing buffer before marking as edited
-        const isEdited = !!raw.updated_at && Math.abs(updatedTime - createdTime) >= 60000;
+        // Fix: Use content_edited_at if available for true edit detection
+        const rawEditedAt = raw.content_edited_at || raw.updated_at;
+        const editedDate = rawEditedAt ? new Date(rawEditedAt) : null;
+        const editedTime = (editedDate && !isNaN(editedDate.getTime())) ? editedDate.getTime() : createdTime;
+
+        // Allow 60s processing buffer before marking as edited (for legacy fallback or creation lag)
+        const isEdited = !!raw.content_edited_at
+            ? Math.abs(editedTime - createdTime) >= 60000
+            : (!!raw.updated_at && Math.abs(editedTime - createdTime) >= 60000);
 
         return {
             id: raw.id,
@@ -200,6 +215,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
             type: raw.type as any,
             createdAt: isNaN(createdDate.getTime()) ? new Date().toISOString() : rawCreated,
             updatedAt: (raw.updated_at && !isNaN(updatedDate.getTime())) ? raw.updated_at : undefined,
+            content_edited_at: (raw.content_edited_at && !isNaN(new Date(raw.content_edited_at).getTime())) ? raw.content_edited_at : undefined,
 
             author: {
                 id: raw.author_id,
@@ -212,8 +228,11 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
             viewer: {
                 isSelf,
                 reaction: raw.viewer_state.my_reaction as any,
+                hasLiked: raw.viewer_state.my_reaction === 'LIKE',
+                hasDisliked: raw.viewer_state.my_reaction === 'DISLIKE',
+                hasLaughed: raw.viewer_state.my_reaction === 'LAUGH',
                 isBookmarked: raw.viewer_state.is_bookmarked,
-                isReposted: raw.viewer_state.my_reaction === 'REPOST',
+                isReposted: raw.viewer_state.is_reposted || raw.viewer_state.my_reaction === 'REPOST',
                 userVoteIndex: raw.viewer_state.user_vote_index,
             },
 

@@ -124,10 +124,8 @@ export const ReactionsPhase: SyncPhase = {
 
         for (const r of pending) {
             try {
-                if (r.reaction_type === 'LIKE') {
-                    await api.toggleLike(r.post_id);
-                }
-                // We don't support REPOST here because reposts are handled via OutboxPostsPhase as 'repost' type posts.
+                // Use the generic react API for all types (LIKE, DISLIKE, LAUGH)
+                await api.react(r.post_id, r.reaction_type as any);
 
                 await db.runAsync(
                     `UPDATE reactions SET sync_status = 'synced' WHERE id = ?`,

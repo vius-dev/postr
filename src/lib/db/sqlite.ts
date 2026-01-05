@@ -62,6 +62,10 @@ const MIGRATIONS: Migration[] = [
                     deleted INTEGER DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER,
+                    content_edited_at INTEGER,
+                    dislike_count INTEGER DEFAULT 0,
+                    laugh_count INTEGER DEFAULT 0,
+                    is_reposted INTEGER DEFAULT 0,
                     FOREIGN KEY (owner_id) REFERENCES users(id)
                 )
             `)
@@ -303,6 +307,10 @@ const MIGRATIONS: Migration[] = [
                     deleted INTEGER DEFAULT 0,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER,
+                    content_edited_at INTEGER,
+                    dislike_count INTEGER DEFAULT 0,
+                    laugh_count INTEGER DEFAULT 0,
+                    is_reposted INTEGER DEFAULT 0,
                     FOREIGN KEY (owner_id) REFERENCES users(id)
                 )
             `);
@@ -440,6 +448,38 @@ const MIGRATIONS: Migration[] = [
             await db.runAsync('DELETE FROM feed_items WHERE post_id NOT IN (SELECT id FROM posts)');
 
             console.log('[Database] Migration version 11: Cleanup complete.');
+        }
+    },
+    {
+        version: 12,
+        up: async (db) => {
+            console.log('[Database] Applying Migration version 12 (Post Content Edit Timestamp)...');
+            const info = await db.getAllAsync(`PRAGMA table_info(posts)`) as any[];
+            if (!info.find(c => c.name === 'content_edited_at')) {
+                await db.runAsync(`ALTER TABLE posts ADD COLUMN content_edited_at INTEGER`);
+                // Initialize existing posts' content_edited_at to their created_at
+                await db.runAsync(`UPDATE posts SET content_edited_at = created_at WHERE content_edited_at IS NULL`);
+            }
+            console.log('[Database] Migration version 12 applied successfully.');
+        }
+    },
+    {
+        version: 13,
+        up: async (db) => {
+            console.log('[Database] Applying Migration version 13 (Reaction Counts & Repost Status)...');
+            const info = await db.getAllAsync(`PRAGMA table_info(posts)`) as any[];
+
+            if (!info.find(c => c.name === 'dislike_count')) {
+                await db.runAsync(`ALTER TABLE posts ADD COLUMN dislike_count INTEGER DEFAULT 0`);
+            }
+            if (!info.find(c => c.name === 'laugh_count')) {
+                await db.runAsync(`ALTER TABLE posts ADD COLUMN laugh_count INTEGER DEFAULT 0`);
+            }
+            if (!info.find(c => c.name === 'is_reposted')) {
+                await db.runAsync(`ALTER TABLE posts ADD COLUMN is_reposted INTEGER DEFAULT 0`);
+            }
+
+            console.log('[Database] Migration version 13 applied successfully.');
         }
     }
 ];

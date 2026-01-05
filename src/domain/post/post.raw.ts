@@ -13,6 +13,7 @@ export interface RawPost extends RawEntity {
     type: string;
     created_at: string;
     updated_at?: string | null;
+    content_edited_at?: string | null;
 
     media?: any[]; // Raw media array
     poll?: any;    // Raw poll object or JSON
@@ -28,6 +29,7 @@ export interface RawPost extends RawEntity {
     viewer_state: {
         my_reaction: string; // 'LIKE', 'DISLIKE', 'LAUGH', 'NONE'
         is_bookmarked: boolean;
+        is_reposted: boolean;
         user_vote_index?: number | null;
     };
 

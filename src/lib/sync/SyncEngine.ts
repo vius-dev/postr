@@ -56,7 +56,7 @@ export const SyncEngine = {
 
     // UI ACTIONS - PURE LOCAL WRITES (Phase 1)
 
-    toggleReaction: async (postId: string, type: 'LIKE' | 'REPOST') => {
+    toggleReaction: async (postId: string, type: 'LIKE' | 'DISLIKE' | 'LAUGH' | 'REPOST') => {
         if (type === 'REPOST') {
             return SyncEngine.toggleRepost(postId);
         }
@@ -72,6 +72,7 @@ export const SyncEngine = {
         await ensureLocalUser(db, user);
 
         const now = Date.now();
+        const countCol = type === 'LIKE' ? 'like_count' : type === 'DISLIKE' ? 'dislike_count' : 'laugh_count';
 
         await db.withTransactionAsync(async () => {
             // Check if exists
@@ -88,7 +89,6 @@ export const SyncEngine = {
                 );
 
                 // Decrement Count
-                const countCol = 'like_count';
                 await db.runAsync(
                     `UPDATE posts SET ${countCol} = MAX(0, ${countCol} - 1) WHERE id = ?`,
                     [postId]
@@ -102,7 +102,6 @@ export const SyncEngine = {
                 );
 
                 // Increment Count
-                const countCol = 'like_count';
                 await db.runAsync(
                     `UPDATE posts SET ${countCol} = ${countCol} + 1 WHERE id = ?`,
                     [postId]
@@ -111,7 +110,6 @@ export const SyncEngine = {
         });
 
         eventEmitter.emit('feedUpdated');
-        // NOTE: No startSync() here. Sync is scheduled or triggered by background events.
     },
 
     votePoll: async (postId: string, choiceIndex: number) => {
@@ -186,7 +184,7 @@ export const SyncEngine = {
                 if (existing) {
                     // Unrepost (soft delete)
                     await db.runAsync('UPDATE posts SET deleted = 1, updated_at = ? WHERE id = ?', [now, existing.id]);
-                    await db.runAsync('UPDATE posts SET repost_count = MAX(0, repost_count - 1) WHERE id = ?', [postId]);
+                    await db.runAsync('UPDATE posts SET repost_count = MAX(0, repost_count - 1), is_reposted = 0 WHERE id = ?', [postId]);
                     // Clear outbox if it hasn't synced yet
                     await db.runAsync('DELETE FROM outbox_posts WHERE (local_id = ? OR (reposted_post_id = ? AND type = "repost")) AND owner_id = ?', [existing.id, postId, user.id]);
                 } else {
@@ -198,15 +196,13 @@ export const SyncEngine = {
 
                     // Repost - Local Stub
                     await db.runAsync(`
-                        INSERT INTO posts (id, owner_id, content, type, reposted_post_id, is_local, sync_status, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, 1, 'pending', ?, ?)
-                    `, [localId, user.id, '', 'repost', postId, now, now]);
+                        INSERT INTO posts (id, owner_id, content, type, reposted_post_id, is_local, sync_status, created_at, updated_at, content_edited_at)
+                        VALUES (?, ?, ?, ?, ?, 1, 'pending', ?, ?, ?)
+                    `, [localId, user.id, '', 'repost', postId, now, now, now]);
 
-                    await db.runAsync('UPDATE posts SET repost_count = repost_count + 1 WHERE id = ?', [postId]);
+                    await db.runAsync('UPDATE posts SET repost_count = repost_count + 1, is_reposted = 1 WHERE id = ?', [postId]);
 
                     // Add to profile feed locally
-                    // FIX: Schema uses 'inserted_at' for feed_items, not 'created_at' (see FeedDeltaPhase/enqueuePost)
-                    // FIX: Must include user_id (NOT NULL constraint)
                     await db.runAsync(`
                         INSERT INTO feed_items (feed_type, user_id, post_id, rank_score, inserted_at)
                         VALUES (?, ?, ?, ?, ?)
@@ -276,9 +272,9 @@ export const SyncEngine = {
 
                 console.log('[SyncEngine] enqueuePoll: Inserting into posts', localId);
                 await db.runAsync(`
-                    INSERT INTO posts (id, owner_id, content, type, poll_json, like_count, reply_count, repost_count, is_local, sync_status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, 0, 0, 0, 1, 'pending', ?, ?)
-                `, [localId, user.id, question, 'poll', JSON.stringify(poll), now, now]);
+                    INSERT INTO posts (id, owner_id, content, type, poll_json, like_count, reply_count, repost_count, is_local, sync_status, created_at, updated_at, content_edited_at)
+                    VALUES (?, ?, ?, ?, ?, 0, 0, 0, 1, 'pending', ?, ?, ?)
+                `, [localId, user.id, question, 'poll', JSON.stringify(poll), now, now, now]);
                 console.log('[SyncEngine] enqueuePoll: Post inserted');
 
                 // VERIFY (Diagnostic)
@@ -341,9 +337,9 @@ export const SyncEngine = {
                 console.log('[SyncEngine] enqueuePost: Inserting into posts', localId);
                 await db.runAsync(`
                     INSERT INTO posts (id, owner_id, content, media_json, poll_json, type, parent_id, quoted_post_id, reposted_post_id, 
-                                     like_count, reply_count, repost_count, is_local, sync_status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 'pending', ?, ?)
-                `, [localId, user.id, content, JSON.stringify(media), JSON.stringify(poll || null), type, parentId || null, quotedPostId || null, repostedPostId || null, now, now]);
+                                     like_count, reply_count, repost_count, is_local, sync_status, created_at, updated_at, content_edited_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 1, 'pending', ?, ?, ?)
+                `, [localId, user.id, content, JSON.stringify(media), JSON.stringify(poll || null), type, parentId || null, quotedPostId || null, repostedPostId || null, now, now, now]);
                 console.log('[SyncEngine] enqueuePost: Post inserted');
 
                 // VERIFY (Diagnostic)

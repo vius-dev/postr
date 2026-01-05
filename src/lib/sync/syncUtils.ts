@@ -108,19 +108,19 @@ export const upsertPost = async (db: SQLite.SQLiteDatabase, post: Post, visited:
 
         await db.runAsync(`
             INSERT INTO posts (id, owner_id, content, media_json, poll_json, type, parent_id, quoted_post_id, reposted_post_id,
-                             visibility, like_count, reply_count, repost_count, is_local, sync_status, deleted, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             visibility, like_count, reply_count, repost_count, is_local, sync_status, deleted, created_at, updated_at, content_edited_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 content=excluded.content, media_json=excluded.media_json, poll_json=excluded.poll_json, like_count=excluded.like_count,
-                reply_count=excluded.reply_count, repost_count=excluded.repost_count, sync_status='synced', updated_at=excluded.updated_at
+                reply_count=excluded.reply_count, repost_count=excluded.repost_count, sync_status='synced', 
+                updated_at=excluded.updated_at, content_edited_at=excluded.content_edited_at
         `, [post.id, post.author.id, post.content, JSON.stringify(post.media || []), finalPollJson, post.type, post.parentPostId || null,
         post.quotedPostId || null, post.repostedPostId || null, post.meta.visibility || 'public', post.stats.likes || 0,
-        post.stats.replies || 0, post.stats.reposts || 0, 0, 'synced', 0, new Date(post.createdAt).getTime(),
-        // Fix: If updatedAt is very close to createdAt (< 60s), force them to be identical
-        // This prevents "Edited" label from showing due to minor backend timestamp differences or processing delays
-        Math.abs(new Date(post.updatedAt || post.createdAt).getTime() - new Date(post.createdAt).getTime()) < 60000
-            ? new Date(post.createdAt).getTime()
-            : new Date(post.updatedAt || post.createdAt).getTime()]);
+        post.stats.replies || 0, post.stats.reposts || 0, 0, 'synced', 0,
+        new Date(post.createdAt).getTime(),
+        new Date(post.updatedAt || post.createdAt).getTime(),
+        post.content_edited_at ? new Date(post.content_edited_at).getTime() : new Date(post.createdAt).getTime()
+        ]);
 
         // Debug: Verify the post was stored correctly
         const stored: any = await db.getFirstAsync('SELECT id, type, quoted_post_id, reposted_post_id FROM posts WHERE id = ?', [post.id]);
