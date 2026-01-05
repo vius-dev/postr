@@ -33,22 +33,35 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
 
   const showAuthority = isAuthorityActive(post.author);
 
-  /*
   const {
     counts,
     userReactions,
     userReposts,
+    initializePost,
   } = useRealtime();
-  */
+
   const [isRepostModalVisible, setRepostModalVisible] = useState(false);
   const [isMenuVisible, setMenuVisible] = useState(false);
   const [isImageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
+  useEffect(() => {
+    initializePost(post.id, {
+      likes: post.stats.likes,
+      dislikes: post.stats.dislikes,
+      laughs: post.stats.laughs,
+      reposts: post.stats.reposts,
+      replies: post.stats.replies,
+      userReaction: post.viewer.reaction,
+      isReposted: post.viewer.isReposted,
+      isBookmarked: post.viewer.isBookmarked,
+    });
+  }, [post.id, post.stats, post.viewer, initializePost]);
+
   // For now, we rely on the Post object provided by the feed/API
   // Realtime updates should ideally update the Post object in state/context
-  const reaction = post.viewer.reaction;
-  const isReposted = post.viewer.isReposted;
+  const reaction = userReactions[post.id] !== undefined ? userReactions[post.id] : post.viewer.reaction;
+  const isReposted = userReposts[post.id] !== undefined ? userReposts[post.id] : post.viewer.isReposted;
 
   // For reposts, the "displayPost" which contains the content, media, etc. is the original
   const displayPost = (post.type === 'repost' && post.repostedPost) ? post.repostedPost : post;
@@ -69,12 +82,13 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   // Use the final resolved post for display
   const resolvedDisplayPost = finalDisplayPost;
 
+  const registryCounts = counts[post.id];
   const currentCounts = {
-    likes: post.stats.likes,
-    dislikes: post.stats.dislikes,
-    laughs: post.stats.laughs,
-    reposts: post.stats.reposts,
-    comments: post.stats.replies, // replies is used for comments
+    likes: registryCounts ? registryCounts.likes : post.stats.likes,
+    dislikes: registryCounts ? registryCounts.dislikes : post.stats.dislikes,
+    laughs: registryCounts ? registryCounts.laughs : post.stats.laughs,
+    reposts: registryCounts ? registryCounts.reposts : post.stats.reposts,
+    comments: registryCounts ? registryCounts.replies : post.stats.replies,
   };
 
   const handleComment = () => {

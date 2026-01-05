@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Poll } from '@/types/poll';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
+import { Poll } from '@/types/poll';
 
 interface PollResultsChartProps {
     poll: Poll;
@@ -10,47 +11,62 @@ interface PollResultsChartProps {
 export default function PollResultsChart({ poll }: PollResultsChartProps) {
     const { theme } = useTheme();
 
-    const calculatePercentage = (count: number) => {
-        if (poll.totalVotes === 0) return 0;
-        return (count / poll.totalVotes) * 100;
-    };
+    if (!poll || poll.totalVotes === 0) {
+        return (
+            <View style={[styles.container, { borderTopColor: theme.borderLight }]}>
+                <Text style={[styles.title, { color: theme.textPrimary }]}>Poll Analytics</Text>
+                <View style={styles.emptyContainer}>
+                    <Ionicons name="stats-chart" size={48} color={theme.textTertiary} />
+                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No votes cast yet</Text>
+                </View>
+            </View>
+        );
+    }
+
+    const maxBarHeight = 160;
 
     return (
         <View style={[styles.container, { borderTopColor: theme.borderLight }]}>
             <Text style={[styles.title, { color: theme.textPrimary }]}>Poll Analytics</Text>
 
-            <View style={styles.chartContainer}>
+            <View style={styles.chartArea}>
                 {poll.choices.map((choice, index) => {
-                    const percentage = calculatePercentage(choice.vote_count);
+                    const percentage = (choice.vote_count / poll.totalVotes) * 100;
+                    const barHeight = (percentage / 100) * maxBarHeight;
 
                     return (
-                        <View key={index} style={styles.choiceRow}>
-                            <View style={styles.labelContainer}>
-                                <Text style={[styles.choiceLabel, { color: theme.textSecondary }]} numberOfLines={1}>
-                                    {choice.text}
+                        <View key={index} style={styles.barColumn}>
+                            <View style={[styles.barWrapper, { height: maxBarHeight + 30 }]}>
+                                <Text style={[styles.percentageText, { color: theme.textSecondary }]}>
+                                    {Math.round(percentage)}%
                                 </Text>
-                                <Text style={[styles.voteCount, { color: theme.textTertiary }]}>
-                                    {choice.vote_count} votes
-                                </Text>
-                            </View>
-
-                            <View style={styles.barWrapper}>
                                 <View
                                     style={[
                                         styles.bar,
                                         {
-                                            width: `${percentage}%`,
-                                            backgroundColor: choice.color || ['#1DA1F2', '#17BF63', '#FFAD1F', '#E0245E', '#794BC4'][index % 5]
+                                            height: Math.max(barHeight, 6),
+                                            backgroundColor: choice.color || theme.primary,
                                         }
                                     ]}
                                 />
-                                <Text style={[styles.percentageText, { color: theme.textPrimary }]}>
-                                    {Math.round(percentage)}%
+                            </View>
+                            <View style={styles.labelContainer}>
+                                <Text style={[styles.choiceLabel, { color: theme.textPrimary }]} numberOfLines={2}>
+                                    {choice.text}
+                                </Text>
+                                <Text style={[styles.voteCount, { color: theme.textTertiary }]}>
+                                    {choice.vote_count} {choice.vote_count === 1 ? 'vote' : 'votes'}
                                 </Text>
                             </View>
                         </View>
                     );
                 })}
+            </View>
+
+            <View style={[styles.footer, { borderTopColor: theme.borderLight }]}>
+                <Text style={[styles.totalVotesText, { color: theme.textSecondary }]}>
+                    Total: <Text style={{ color: theme.textPrimary, fontWeight: 'bold' }}>{poll.totalVotes}</Text> votes
+                </Text>
             </View>
         </View>
     );
@@ -63,43 +79,70 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     title: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
-        marginBottom: 16,
+        marginBottom: 24,
+        textAlign: 'center',
     },
-    chartContainer: {
-        gap: 16,
-    },
-    choiceRow: {
-        gap: 4,
-    },
-    labelContainer: {
+    chartArea: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 4,
+        alignItems: 'flex-end',
+        justifyContent: 'space-around',
+        marginBottom: 24,
+        minHeight: 220,
     },
-    choiceLabel: {
-        fontSize: 14,
+    barColumn: {
         flex: 1,
-        marginRight: 8,
-    },
-    voteCount: {
-        fontSize: 12,
+        alignItems: 'center',
+        paddingHorizontal: 4,
     },
     barWrapper: {
-        flexDirection: 'row',
+        width: '100%',
         alignItems: 'center',
-        gap: 12,
+        justifyContent: 'flex-end',
+        marginBottom: 12,
     },
     bar: {
-        height: 12,
-        borderRadius: 6,
-        minWidth: 4,
+        width: '70%',
+        maxWidth: 40,
+        borderTopLeftRadius: 6,
+        borderTopRightRadius: 6,
     },
     percentageText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginBottom: 6,
+    },
+    labelContainer: {
+        alignItems: 'center',
+        height: 50,
+    },
+    choiceLabel: {
         fontSize: 13,
         fontWeight: '600',
-        width: 40,
+        textAlign: 'center',
+        marginBottom: 2,
+    },
+    voteCount: {
+        fontSize: 11,
+    },
+    footer: {
+        marginTop: 8,
+        paddingTop: 16,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        alignItems: 'center',
+    },
+    totalVotesText: {
+        fontSize: 14,
+    },
+    emptyContainer: {
+        padding: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    emptyText: {
+        fontSize: 16,
     },
 });
+

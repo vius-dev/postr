@@ -109,6 +109,7 @@ export const SyncEngine = {
             }
         });
 
+        await SyncEngine.emitEngagementUpdate(postId);
         eventEmitter.emit('feedUpdated');
     },
 
@@ -157,6 +158,40 @@ export const SyncEngine = {
         eventEmitter.emit('feedUpdated');
         // Trigger sync to push vote immediately
         SyncEngine.startSync();
+    },
+
+    emitEngagementUpdate: async (postId: string) => {
+        try {
+            const db = await getDb();
+            const user = await api.getCurrentUser();
+            if (!user) return;
+
+            const row: any = await db.getFirstAsync(`
+                SELECT 
+                    p.id, p.like_count, p.dislike_count, p.laugh_count, p.repost_count, p.reply_count, p.is_reposted,
+                    r.reaction_type as my_reaction
+                FROM posts p
+                LEFT JOIN reactions r ON p.id = r.post_id AND r.user_id = ?
+                WHERE p.id = ?
+            `, [user.id, postId]);
+
+            if (row) {
+                eventEmitter.emit('post-engagement-updated', {
+                    postId: row.id,
+                    counts: {
+                        likes: row.like_count,
+                        dislikes: row.dislike_count,
+                        laughs: row.laugh_count,
+                        reposts: row.repost_count,
+                        replies: row.reply_count || 0,
+                    },
+                    myReaction: row.my_reaction || 'NONE',
+                    isReposted: !!row.is_reposted
+                });
+            }
+        } catch (e) {
+            console.warn('[SyncEngine] Failed to emit engagement update', e);
+        }
     },
 
     toggleRepost: async (postId: string) => {
@@ -214,6 +249,7 @@ export const SyncEngine = {
             throw err;
         }
 
+        await SyncEngine.emitEngagementUpdate(postId);
         eventEmitter.emit('feedUpdated');
     },
 

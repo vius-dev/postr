@@ -8,6 +8,7 @@ import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
 import { PollChoice } from '@/types/poll';
+import PollDurationModal from '@/components/modals/PollDurationModal';
 
 const MAX_CHOICES = 4;
 const POLL_COLORS = [
@@ -41,6 +42,7 @@ export default function PollScreen() {
   const [days, setDays] = useState(1);
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
+  const [showDurationModal, setShowDurationModal] = useState(false);
 
   const handleAddChoice = () => {
     if (choices.length < MAX_CHOICES) {
@@ -127,87 +129,33 @@ export default function PollScreen() {
             </TouchableOpacity>
           )}
 
-          <View style={[styles.durationSection, { borderTopColor: theme.border }]}>
-            <Text style={[styles.sectionHeader, { color: theme.textPrimary }]}>Poll length</Text>
-            <View style={styles.pickerContainer}>
-              <View style={styles.pickerItem}>
-                <Text style={[styles.pickerLabel, { color: theme.textSecondary }]}>Days</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.capsuleScroll}
-                >
-                  {[0, 1, 2, 3, 4, 5, 6, 7].map(d => (
-                    <TouchableOpacity
-                      key={d}
-                      onPress={() => setDays(d)}
-                      style={[
-                        styles.capsule,
-                        { borderColor: theme.border },
-                        days === d && { backgroundColor: theme.primary, borderColor: theme.primary }
-                      ]}
-                    >
-                      <Text style={[
-                        styles.capsuleText,
-                        { color: theme.textPrimary },
-                        days === d && { color: theme.textInverse }
-                      ]}>{d}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              <View style={styles.pickerRow}>
-                <View style={[styles.pickerItem, { flex: 1 }]}>
-                  <Text style={[styles.pickerLabel, { color: theme.textSecondary }]}>Hours</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.capsuleScroll}>
-                    {[0, 1, 2, 3, 6, 12, 18, 23].map(h => (
-                      <TouchableOpacity
-                        key={h}
-                        onPress={() => setHours(h)}
-                        style={[
-                          styles.capsule,
-                          { borderColor: theme.border },
-                          hours === h && { backgroundColor: theme.primary, borderColor: theme.primary }
-                        ]}
-                      >
-                        <Text style={[
-                          styles.capsuleText,
-                          { color: theme.textPrimary },
-                          hours === h && { color: theme.textInverse }
-                        ]}>{h}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View style={[styles.pickerItem, { flex: 1 }]}>
-                  <Text style={[styles.pickerLabel, { color: theme.textSecondary }]}>Minutes</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.capsuleScroll}>
-                    {[0, 5, 10, 15, 30, 45].map(m => (
-                      <TouchableOpacity
-                        key={m}
-                        onPress={() => setMinutes(m)}
-                        style={[
-                          styles.capsule,
-                          { borderColor: theme.border },
-                          minutes === m && { backgroundColor: theme.primary, borderColor: theme.primary }
-                        ]}
-                      >
-                        <Text style={[
-                          styles.capsuleText,
-                          { color: theme.textPrimary },
-                          minutes === m && { color: theme.textInverse }
-                        ]}>{m}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
+          <TouchableOpacity
+            style={[styles.durationRow, { borderTopColor: theme.border, borderBottomColor: theme.border }]}
+            onPress={() => setShowDurationModal(true)}
+          >
+            <View style={styles.durationInfo}>
+              <Text style={[styles.durationLabel, { color: theme.textPrimary }]}>Poll length</Text>
+              <Text style={[styles.durationValue, { color: theme.primary }]}>
+                {days} days, {hours} hours, {minutes} mins
+              </Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PollDurationModal
+        visible={showDurationModal}
+        onClose={() => setShowDurationModal(false)}
+        initialDays={days}
+        initialHours={hours}
+        initialMinutes={minutes}
+        onSave={(d, h, m) => {
+          setDays(d);
+          setHours(h);
+          setMinutes(m);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -274,44 +222,24 @@ const styles = StyleSheet.create({
   addChoiceText: {
     fontWeight: 'bold',
   },
-  durationSection: {
-    marginTop: 24,
-    paddingTop: 24,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  pickerContainer: {
-    gap: 16,
-  },
-  pickerItem: {
-    gap: 8,
-  },
-  pickerRow: {
+  durationRow: {
     flexDirection: 'row',
-    gap: 16,
-  },
-  pickerLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  capsuleScroll: {
-    gap: 8,
-    paddingRight: 20,
-  },
-  capsule: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    minWidth: 44,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    marginTop: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  capsuleText: {
-    fontSize: 14,
+  durationInfo: {
+    flex: 1,
+  },
+  durationLabel: {
+    fontSize: 16,
     fontWeight: '600',
+  },
+  durationValue: {
+    fontSize: 14,
+    marginTop: 4,
   },
 });

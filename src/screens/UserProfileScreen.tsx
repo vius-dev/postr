@@ -155,12 +155,18 @@ export default function UserProfileScreen() {
       }
     };
 
+    const handleFeedUpdate = () => {
+      loadUser(true); // Silent update from SQLite
+    };
+
     eventEmitter.on('profileUpdated', handleUpdate);
+    eventEmitter.on('feedUpdated', handleFeedUpdate);
 
     loadUser(false); // Initial load (not silent)
 
     return () => {
       eventEmitter.off('profileUpdated', handleUpdate);
+      eventEmitter.off('feedUpdated', handleFeedUpdate);
     };
   }, [paramUsername, currentUser?.id]); // Added currentUser.id dependency for reaction join
 

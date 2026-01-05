@@ -291,12 +291,32 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     };
 
+    const handleEngagementUpdate = ({ postId, counts, myReaction, isReposted }: any) => {
+      setState(prev => ({
+        ...prev,
+        counts: {
+          ...prev.counts,
+          [postId]: counts,
+        },
+        userReactions: {
+          ...prev.userReactions,
+          [postId]: myReaction,
+        },
+        userReposts: {
+          ...prev.userReposts,
+          [postId]: isReposted,
+        },
+      }));
+    };
+
     eventEmitter.on('count-update', handleCountUpdate);
     eventEmitter.on('newComment', handleNewComment);
+    eventEmitter.on('post-engagement-updated', handleEngagementUpdate);
 
     return () => {
       eventEmitter.off('count-update', handleCountUpdate);
       eventEmitter.off('newComment', handleNewComment);
+      eventEmitter.off('post-engagement-updated', handleEngagementUpdate);
     };
   }, [setCounts]);
 

@@ -5,6 +5,7 @@ import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
 import { Post } from '@/types/post';
 import FeedList from '@/components/FeedList';
+import { eventEmitter } from '@/lib/EventEmitter';
 
 export default function HashtagFeedScreen() {
   const { tag } = useLocalSearchParams<{ tag: string }>();
@@ -41,6 +42,22 @@ export default function HashtagFeedScreen() {
 
   useEffect(() => {
     fetchPosts();
+
+    const handleFeedUpdate = () => {
+      onRefresh();
+    };
+
+    const handlePostDeleted = (deletedPostId: string) => {
+      setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
+    };
+
+    eventEmitter.on('feedUpdated', handleFeedUpdate);
+    eventEmitter.on('postDeleted', handlePostDeleted);
+
+    return () => {
+      eventEmitter.off('feedUpdated', handleFeedUpdate);
+      eventEmitter.off('postDeleted', handlePostDeleted);
+    };
   }, [tag]);
 
   return (

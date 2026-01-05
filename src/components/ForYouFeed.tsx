@@ -24,8 +24,17 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
       setPosts(currentPosts => currentPosts.filter(p => p.id !== deletedPostId));
     };
 
+    const handleFeedUpdate = () => {
+      loadInitialPosts();
+    };
+
     eventEmitter.on('postDeleted', handlePostDeleted);
-    return () => eventEmitter.off('postDeleted', handlePostDeleted);
+    eventEmitter.on('feedUpdated', handleFeedUpdate);
+
+    return () => {
+      eventEmitter.off('postDeleted', handlePostDeleted);
+      eventEmitter.off('feedUpdated', handleFeedUpdate);
+    };
   }, []);
 
   const loadInitialPosts = async () => {
