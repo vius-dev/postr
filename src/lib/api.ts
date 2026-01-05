@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { getDb } from './db/sqlite';
 import { Post, ReactionAction, Comment, Media } from "@/types/post";
 import { User, UserProfile, Session } from "@/types/user";
+import { List, CreateListInput, UpdateListInput } from '@/types/list';
 import { Notification } from "@/types/notification";
 import { Conversation, Message } from "@/types/message";
 import { ViewerRelationship } from "@/components/profile/ProfileActionRow";
@@ -1697,6 +1698,242 @@ export const api = {
     return hydratePosts(
       data.map(row => mapPost(row, currentUserId)).filter((p): p is Post => p !== null)
     );
+  },
+
+  // LISTS
+  // -------------------------------------------------------------------------
+  getLists: async (userId: string): Promise<List[]> => {
+    const { data, error } = await supabase
+      .from('lists')
+      .select(`
+        *,
+        owner:profiles!owner_id(*),
+        member_count:list_members(count),
+        subscriber_count:list_subscriptions(count)
+      `)
+      .eq('owner_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Check if current user is subscribed
+    const currentUser = await api.getCurrentUser();
+
+    return Promise.all(data.map(async (l: any) => {
+      const isSubscribed = currentUser
+        ? await api.isSubscribedToList(l.id, currentUser.id)
+        : false;
+
+      return {
+        id: l.id,
+        owner: l.owner,
+        name: l.name,
+        description: l.description,
+        isPrivate: l.is_private,
+        createdAt: l.created_at,
+        updatedAt: l.updated_at,
+        memberCount: l.member_count?.[0]?.count || 0,
+        subscriberCount: l.subscriber_count?.[0]?.count || 0,
+        isSubscribed
+      };
+    }));
+  },
+
+  getList: async (listId: string): Promise<List | null> => {
+    const { data, error } = await supabase
+      .from('lists')
+      .select(`
+        *,
+        owner:profiles!owner_id(*),
+        member_count:list_members(count),
+        subscriber_count:list_subscriptions(count)
+      `)
+      .eq('id', listId)
+      .single();
+
+    if (error) return null;
+
+    const currentUser = await api.getCurrentUser();
+    const isSubscribed = currentUser
+      ? await api.isSubscribedToList(listId, currentUser.id)
+      : false;
+
+    return {
+      id: data.id,
+      owner: data.owner,
+      name: data.name,
+      description: data.description,
+      isPrivate: data.is_private,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      memberCount: data.member_count?.[0]?.count || 0,
+      subscriberCount: data.subscriber_count?.[0]?.count || 0,
+      isSubscribed
+    };
+  },
+
+  createList: async (input: CreateListInput): Promise<List> => {
+    const user = await getAuthenticatedUser();
+
+    // 1. Create List
+    const { data, error } = await supabase
+      .from('lists')
+      .insert({
+        owner_id: user.id,
+        name: input.name,
+        description: input.description,
+        is_private: input.isPrivate ?? false
+      })
+      .select('*, owner:profiles!owner_id(*)')
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      owner: data.owner, // Joined profile
+      name: data.name,
+      description: data.description,
+      isPrivate: data.is_private,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      memberCount: 0,
+      subscriberCount: 0,
+      isSubscribed: false
+    };
+  },
+
+  updateList: async (listId: string, input: UpdateListInput): Promise<void> => {
+    const updates: any = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.description !== undefined) updates.description = input.description;
+    if (input.isPrivate !== undefined) updates.is_private = input.isPrivate;
+    updates.updated_at = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('lists')
+      .update(updates)
+      .eq('id', listId);
+
+    if (error) throw error;
+  },
+
+  deleteList: async (listId: string): Promise<void> => {
+    const { error } = await supabase
+      .from('lists')
+      .delete()
+      .eq('id', listId);
+
+    if (error) throw error;
+  },
+
+  addListMember: async (listId: string, userId: string): Promise<void> => {
+    const currentUser = await getAuthenticatedUser();
+    const { error } = await supabase
+      .from('list_members')
+      .insert({
+        list_id: listId,
+        user_id: userId,
+        added_by: currentUser.id
+      });
+
+    if (error) throw error;
+  },
+
+  removeListMember: async (listId: string, userId: string): Promise<void> => {
+    const { error } = await supabase
+      .from('list_members')
+      .delete()
+      .match({ list_id: listId, user_id: userId });
+
+    if (error) throw error;
+  },
+
+  getListMembers: async (listId: string): Promise<User[]> => {
+    const { data, error } = await supabase
+      .from('list_members')
+      .select(`
+        user:profiles!user_id(*)
+      `)
+      .eq('list_id', listId);
+
+    if (error) throw error;
+    return data.map((d: any) => d.user);
+  },
+
+  isSubscribedToList: async (listId: string, userId: string): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from('list_subscriptions')
+      .select('id')
+      .match({ list_id: listId, subscriber_id: userId })
+      .maybeSingle();
+
+    return !!data;
+  },
+
+  subscribeToList: async (listId: string): Promise<void> => {
+    const user = await getAuthenticatedUser();
+    const { error } = await supabase
+      .from('list_subscriptions')
+      .insert({
+        list_id: listId,
+        subscriber_id: user.id
+      });
+
+    if (error) throw error;
+  },
+
+  unsubscribeFromList: async (listId: string): Promise<void> => {
+    const user = await getAuthenticatedUser();
+    const { error } = await supabase
+      .from('list_subscriptions')
+      .delete()
+      .match({ list_id: listId, subscriber_id: user.id });
+
+    if (error) throw error;
+  },
+
+  getListFeed: async (listId: string, params: { limit?: number; cursor?: string } = {}): Promise<{ posts: Post[]; nextCursor?: string; hasMore: boolean }> => {
+    // 1. Get member IDs
+    const memberUsers = await api.getListMembers(listId);
+    const memberIds = memberUsers.map(u => u.id);
+
+    if (memberIds.length === 0) {
+      return { posts: [], hasMore: false };
+    }
+
+    // 2. Fetch posts from these users (Standard Feed Query filtered by author)
+    const limit = params.limit || DEFAULT_PAGE_SIZE;
+
+    let query = supabase
+      .from('posts')
+      .select(POST_SELECT)
+      .in('owner_id', memberIds)
+      .is('deleted_at', null)
+      .is('parent_id', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (params.cursor) {
+      query = query.lt('created_at', params.cursor);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const user = await api.getCurrentUser();
+    const userId = user?.id || null;
+
+    const posts = await hydratePosts(
+      data.map(row => mapPost(row, userId)).filter((p): p is Post => p !== null)
+    );
+    const hasMore = posts.length === limit;
+
+    return {
+      posts,
+      nextCursor: hasMore && posts.length > 0 ? posts[posts.length - 1].createdAt : undefined,
+      hasMore
+    };
   },
 
   // REALTIME SUBSCRIPTIONS

@@ -115,6 +115,15 @@ function RootLayoutNav() {
                 <Stack.Screen name="messages/settings" options={{ headerShown: false }} />
                 <Stack.Screen name="(feed)/post" options={{ title: 'Post' }} />
                 <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="lists/index" options={{ headerShown: false }} />
+                <Stack.Screen name="lists/[id]/index" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="(modals)/create-list"
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                  }}
+                />
                 <Stack.Screen
                   name="(compose)/compose"
                   options={{

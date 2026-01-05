@@ -68,10 +68,7 @@ export const SideDrawer = ({ onClose }: SideDrawerProps) => {
                     <DrawerItem
                         icon="list-outline"
                         label="Lists"
-                        onPress={() => {
-                            // TODO: Implement Lists screen
-                            onClose();
-                        }}
+                        onPress={() => navigate('/lists')}
                     />
                     <DrawerItem
                         icon="settings-outline"
