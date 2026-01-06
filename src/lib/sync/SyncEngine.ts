@@ -75,26 +75,35 @@ export const SyncEngine = {
         const countCol = type === 'LIKE' ? 'like_count' : type === 'DISLIKE' ? 'dislike_count' : 'laugh_count';
 
         await db.withTransactionAsync(async () => {
-            // Check if exists
-            const existing: any = await db.getFirstAsync(
-                'SELECT * FROM reactions WHERE post_id = ? AND user_id = ? AND reaction_type = ?',
-                [postId, user.id, type]
+            // Enforce Mutual Exclusivity: Check if ANY reaction exists for this post/user
+            const allExisting: any[] = await db.getAllAsync(
+                'SELECT reaction_type FROM reactions WHERE post_id = ? AND user_id = ?',
+                [postId, user.id]
             );
 
-            if (existing) {
-                // Remove (Optimistic)
-                await db.runAsync(
-                    'DELETE FROM reactions WHERE post_id = ? AND user_id = ? AND reaction_type = ?',
-                    [postId, user.id, type]
-                );
+            const currentType = allExisting.length > 0 ? allExisting[0].reaction_type : 'NONE';
+            const isTogglingSame = currentType === type;
 
-                // Decrement Count
-                await db.runAsync(
-                    `UPDATE posts SET ${countCol} = MAX(0, ${countCol} - 1) WHERE id = ?`,
-                    [postId]
-                );
-            } else {
-                // Add (Optimistic)
+            if (allExisting.length > 0) {
+                // Remove existing reactions (Optimistic)
+                for (const reaction of allExisting) {
+                    const exType = reaction.reaction_type;
+                    const exCol = exType === 'LIKE' ? 'like_count' : exType === 'DISLIKE' ? 'dislike_count' : 'laugh_count';
+
+                    await db.runAsync(
+                        'DELETE FROM reactions WHERE post_id = ? AND user_id = ? AND reaction_type = ?',
+                        [postId, user.id, exType]
+                    );
+
+                    await db.runAsync(
+                        `UPDATE posts SET ${exCol} = MAX(0, ${exCol} - 1) WHERE id = ?`,
+                        [postId]
+                    );
+                }
+            }
+
+            if (!isTogglingSame) {
+                // Add New Reaction (Optimistic)
                 await db.runAsync(
                     `INSERT INTO reactions (id, post_id, user_id, reaction_type, sync_status, created_at)
                       VALUES (?, ?, ?, ?, 'pending', ?)`,

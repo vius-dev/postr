@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text as RNText, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
 import { api } from '@/lib/api';
 import { Post } from '@/types/post';
 import PostCard from '@/components/PostCard';
 import { useTheme } from '@/theme/theme';
 import { eventEmitter } from '@/lib/EventEmitter';
+import { WhoToFollow } from './discovery/WhoToFollow';
 
 interface ForYouFeedProps {
   header?: React.ReactElement;
@@ -80,6 +81,18 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
           <ActivityIndicator style={{ marginVertical: 20 }} color={theme.primary} />
         ) : loading && posts.length === 0 ? (
           <View style={styles.centered}><ActivityIndicator color={theme.primary} /></View>
+        ) : !loading && posts.length === 0 ? (
+          <View>
+            <View style={styles.emptyContainer}>
+              <RNText style={[styles.emptyText, { color: theme.textSecondary }]}>
+                Your feed is empty.
+              </RNText>
+              <RNText style={[styles.emptySubtext, { color: theme.textTertiary }]}>
+                Follow some people to see their posts here.
+              </RNText>
+            </View>
+            <WhoToFollow />
+          </View>
         ) : null
       }
       onRefresh={loadInitialPosts}
@@ -91,8 +104,26 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
 const styles = StyleSheet.create({
   centered: {
     flex: 1,
+    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
   },
 });
 

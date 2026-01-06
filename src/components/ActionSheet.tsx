@@ -13,6 +13,7 @@ import { useTheme } from '@/theme/theme';
 type ActionSheetOption = {
   id: string;
   label: string;
+  destructive?: boolean;
 };
 
 type ActionSheetProps = {
@@ -58,7 +59,10 @@ export default function ActionSheet({
                   ]}
                   onPress={() => handleSelect(option)}
                 >
-                  <Text style={[styles.optionText, { color: theme.primary }]}>
+                  <Text style={[
+                    styles.optionText,
+                    { color: option.destructive ? theme.error : theme.primary }
+                  ]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -110,7 +114,7 @@ const styles = StyleSheet.create({
   },
   cancelOption: {
     borderTopWidth: 8,
-    marginTop: -1, 
+    marginTop: -1,
   },
   cancelOptionText: {
     fontSize: 18,

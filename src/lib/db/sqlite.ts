@@ -481,6 +481,28 @@ const MIGRATIONS: Migration[] = [
 
             console.log('[Database] Migration version 13 applied successfully.');
         }
+    },
+    {
+        version: 14,
+        up: async (db) => {
+            console.log('[Database] Applying Migration version 14 (Drafts Table)...');
+            await db.runAsync(`
+                CREATE TABLE IF NOT EXISTS drafts (
+                    id TEXT PRIMARY KEY,
+                    owner_id TEXT NOT NULL,
+                    content TEXT,
+                    media_json TEXT,
+                    poll_json TEXT,
+                    type TEXT DEFAULT 'original',
+                    parent_id TEXT,
+                    quoted_post_id TEXT,
+                    reposted_post_id TEXT,
+                    created_at INTEGER,
+                    updated_at INTEGER
+                )
+            `);
+            console.log('[Database] Migration version 14 applied successfully.');
+        }
     }
 ];
 
@@ -560,6 +582,7 @@ export const bindUserDatabase = async (userId: string) => {
         await db.runAsync('DELETE FROM reactions WHERE user_id != ?', [userId]);
         await db.runAsync('DELETE FROM bookmarks WHERE user_id != ?', [userId]);
         await db.runAsync('DELETE FROM outbox_posts WHERE owner_id != ?', [userId]);
+        await db.runAsync('DELETE FROM drafts WHERE owner_id != ?', [userId]);
         await db.runAsync('DELETE FROM sync_state WHERE user_id != ?', [userId]);
 
         // STRICT PURGE: Remove posts not belonging to this user or orphaned
@@ -579,6 +602,7 @@ export const wipeUserData = async (userId: string) => {
         await db.runAsync('DELETE FROM reactions WHERE user_id = ?', [userId]);
         await db.runAsync('DELETE FROM bookmarks WHERE user_id = ?', [userId]);
         await db.runAsync('DELETE FROM outbox_posts WHERE owner_id = ?', [userId]);
+        await db.runAsync('DELETE FROM drafts WHERE owner_id = ?', [userId]);
         await db.runAsync('DELETE FROM sync_state WHERE user_id = ?', [userId]);
         await db.runAsync('DELETE FROM posts WHERE owner_id = ?', [userId]);
     });

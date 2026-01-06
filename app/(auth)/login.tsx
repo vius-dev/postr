@@ -23,9 +23,8 @@ export default function LoginScreen() {
       const { user, session } = await api.login(email, password);
       console.log('[LoginScreen] Login successful. User ID:', user.id);
 
-      // Navigation will happen automatically via auth state change
-      console.log('[LoginScreen] Redirecting to tabs...');
-      router.replace('/(tabs)');
+      // Navigation will happen automatically via RootLayoutNav auth state listener
+      console.log('[LoginScreen] Login successful, waiting for layout redirect...');
     } catch (error: any) {
       console.error('[LoginScreen] Login error:', error);
       alert(error.message || 'Failed to login');

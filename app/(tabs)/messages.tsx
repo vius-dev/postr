@@ -6,6 +6,7 @@ import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
 import { Conversation } from '@/types/message';
 import ConversationItem from '@/components/ConversationItem';
+import EmptyState from '@/components/EmptyState';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -206,19 +207,13 @@ export default function MessagesScreen() {
         refreshing={loading}
         onRefresh={loadConversations}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
-              {searchQuery ? 'No results found' : 'No messages yet'}
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
-              {searchQuery ? 'Try searching for something else.' : 'Direct Messages are private conversations between you and other people on Vius.'}
-            </Text>
-            {!searchQuery && (
-              <TouchableOpacity style={[styles.writeButton, { backgroundColor: theme.primary }]} onPress={() => router.push('/(modals)/new-message')}>
-                <Text style={[styles.writeButtonText, { color: theme.textInverse }]}>Write a message</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <EmptyState
+            title={searchQuery ? 'No results found' : 'Welcome to your inbox!'}
+            description={searchQuery ? 'Try searching for something else.' : 'Direct Messages are private conversations between you and other people on Postr.'}
+            icon={searchQuery ? 'search-outline' : 'mail-unread-outline'}
+            actionLabel={!searchQuery ? 'Write a message' : undefined}
+            onAction={!searchQuery ? () => router.push('/(modals)/new-message') : undefined}
+          />
         }
       />
 

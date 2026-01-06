@@ -17,7 +17,7 @@ interface ProfileActionRowProps {
   onFollow: () => void;
   onUnfollow: () => void;
   onEditProfile: () => void;
-  onSettings?: () => void;
+  onMoreOptions?: () => void;
   isLoading: boolean;
   style?: any;
 }
@@ -27,44 +27,56 @@ export default function ProfileActionRow({
   onFollow,
   onUnfollow,
   onEditProfile,
-  onSettings,
+  onMoreOptions,
   isLoading,
   style
 }: ProfileActionRowProps) {
   const { theme } = useTheme();
 
   const renderButton = () => {
-    switch (relationship.type) {
-      case 'SELF':
-        return (
-          <View style={styles.row}>
-            <Button text="Edit profile" onPress={onEditProfile} />
-            <TouchableOpacity
-              onPress={onSettings}
-              style={[styles.iconButton, { borderColor: theme.borderLight }]}
-            >
-              <Ionicons name="settings-outline" size={20} color={theme.textPrimary} />
-            </TouchableOpacity>
-          </View>
-        );
-      case 'NOT_FOLLOWING':
-        return <Button text="Follow" onPress={onFollow} loading={isLoading} />;
-      case 'FOLLOWING':
-        return <Button text="Following" onPress={onUnfollow} variant="secondary" loading={isLoading} />;
-      case 'MUTED':
-        return (
-          <View style={styles.row}>
-            <Button text="Following" onPress={onUnfollow} variant="secondary" loading={isLoading} />
-            <View style={[styles.statusIcon, { borderColor: theme.borderLight }]}>
-              <Ionicons name="volume-mute-outline" size={20} color={theme.textTertiary} />
+    const mainButton = (() => {
+      switch (relationship.type) {
+        case 'SELF':
+          return (
+            <View style={styles.row}>
+              <Button text="Edit profile" onPress={onEditProfile} />
             </View>
-          </View>
-        );
-      case 'BLOCKED':
-        return <Button text="Blocked" onPress={() => { }} variant="danger" />;
-      default:
-        return null;
-    }
+          );
+        case 'NOT_FOLLOWING':
+          return <Button text="Follow" onPress={onFollow} loading={isLoading} />;
+        case 'FOLLOWING':
+          return <Button text="Following" onPress={onUnfollow} variant="secondary" loading={isLoading} />;
+        case 'MUTED':
+          return (
+            <View style={styles.row}>
+              <Button text="Following" onPress={onUnfollow} variant="secondary" loading={isLoading} />
+              <View style={[styles.statusIcon, { borderColor: theme.borderLight }]}>
+                <Ionicons name="volume-mute-outline" size={20} color={theme.textTertiary} />
+              </View>
+            </View>
+          );
+        case 'BLOCKED':
+          return <Button text="Blocked" onPress={() => { }} variant="danger" />;
+        default:
+          return null;
+      }
+    })();
+
+    if (relationship.type === 'SELF') return mainButton;
+
+    return (
+      <View style={styles.row}>
+        {mainButton}
+        {onMoreOptions && (
+          <TouchableOpacity
+            onPress={onMoreOptions}
+            style={[styles.iconButton, { borderColor: theme.borderLight, marginLeft: 8 }]}
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={theme.textPrimary} />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
   };
 
   return (

@@ -24,6 +24,9 @@ import QuotedPost from '@/components/QuotedPost';
 import { Post } from '@/types/post';
 import { useEffect } from 'react';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
+import { DraftsService, Draft } from '@/lib/drafts';
+import { useAuth } from '@/providers/AuthProvider';
+import DraftsListModal from '@/components/composer/DraftsListModal';
 
 const MAX_CHARACTERS = 280;
 
@@ -39,11 +42,14 @@ const ComposeScreen = () => {
   }>();
 
   const [text, setText] = useState('');
-  const [media, setMedia] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [media, setMedia] = useState<{ uri: string, type: 'image' | 'video' }[]>([]);
   const [quotedPost, setQuotedPost] = useState<Post | null>(null);
   const [isEditing, setIsEditing] = useState(mode === 'edit');
   const [originalPost, setOriginalPost] = useState<Post | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [draftCount, setDraftCount] = useState(0);
+  const { user } = useAuth();
 
   // Load post for editing
   useEffect(() => {
@@ -82,6 +88,12 @@ const ComposeScreen = () => {
     }
   }, [quotePostId]);
 
+  useEffect(() => {
+    if (user?.id) {
+      DraftsService.getDrafts(user.id).then(d => setDraftCount(d.length));
+    }
+  }, [user?.id, showDrafts]);
+
   const characterCount = text.length;
   // Allow empty media if it's an edit
   const isPostButtonDisabled = isSubmitting || (characterCount === 0 && media.length === 0) || characterCount > MAX_CHARACTERS;
@@ -90,16 +102,37 @@ const ComposeScreen = () => {
     if (text.length > 0 || media.length > 0) {
       Alert.alert(
         isEditing ? 'Discard changes?' : 'Discard post?',
-        'Your changes will be lost.',
+        'You can save this as a draft and come back to it later.',
         [
-          { text: 'Keep editing', style: 'cancel' },
           { text: 'Discard', style: 'destructive', onPress: () => router.back() },
+          {
+            text: 'Save Draft',
+            onPress: async () => {
+              if (user?.id) {
+                await DraftsService.saveDraft(user.id, {
+                  content: text,
+                  media: media.map(m => ({ uri: m.uri, type: 'image' })),
+                  quotedPostId: quotePostId || undefined,
+                  type: replyToId ? 'reply' : (quotePostId ? 'quote' : 'original'),
+                  parentId: replyToId || undefined
+                });
+                router.back();
+              }
+            }
+          },
+          { text: 'Keep editing', style: 'cancel' },
         ],
         { cancelable: true }
       );
     } else {
       router.back();
     }
+  };
+
+  const handleSelectDraft = (draft: Draft) => {
+    setText(draft.content);
+    setMedia(draft.media.map(m => ({ uri: m.url || m.uri, type: 'image' })));
+    setShowDrafts(false);
   };
 
   const handlePost = async () => {
@@ -137,7 +170,11 @@ const ComposeScreen = () => {
     });
 
     if (!result.canceled) {
-      setMedia([...media, ...result.assets]);
+      const newMedia = result.assets.map(a => ({
+        uri: a.uri,
+        type: a.type === 'video' ? 'video' as const : 'image' as const
+      }));
+      setMedia([...media, ...newMedia]);
     }
   };
 
@@ -151,6 +188,11 @@ const ComposeScreen = () => {
         <Pressable onPress={handleCancel}>
           <Text style={[styles.headerButton, { color: theme.link }]}>Cancel</Text>
         </Pressable>
+        {draftCount > 0 && !isEditing && (
+          <TouchableOpacity onPress={() => setShowDrafts(true)}>
+            <Text style={[styles.draftsButton, { color: theme.primary, fontWeight: 'bold' }]}>Drafts ({draftCount})</Text>
+          </TouchableOpacity>
+        )}
         <Pressable onPress={handlePost} disabled={isPostButtonDisabled}>
           <Text style={[styles.postButton, { color: isPostButtonDisabled ? theme.textTertiary : theme.link }]}>
             {isSubmitting ? (isEditing ? 'Saving...' : 'Posting...') : (isEditing ? 'Save' : (replyToId ? 'Reply' : 'Post'))}
@@ -208,6 +250,13 @@ const ComposeScreen = () => {
             {characterCount > 0 ? `${characterCount}/${MAX_CHARACTERS}` : ''}
           </Text>
         </View>
+
+        <DraftsListModal
+          visible={showDrafts}
+          onClose={() => setShowDrafts(false)}
+          onSelect={handleSelectDraft}
+          userId={user?.id || ''}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -231,6 +280,9 @@ const styles = StyleSheet.create({
   postButton: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  draftsButton: {
+    fontSize: 15,
   },
   keyboardAvoidingView: {
     flex: 1,

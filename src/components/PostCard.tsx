@@ -92,13 +92,13 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   };
 
   const handleComment = () => {
-    router.push({ pathname: '/(compose)/compose', params: { replyToId: post.id, authorUsername: post.author.username } });
+    router.push({ pathname: '/(compose)/compose', params: { replyToId: resolvedDisplayPost.id, authorUsername: resolvedDisplayPost.author.username } });
   };
 
   const handleReaction = async (action: ReactionAction) => {
     try {
       if (action === 'NONE') return;
-      await SyncEngine.toggleReaction(post.id, action as any);
+      await SyncEngine.toggleReaction(resolvedDisplayPost.id, action as any);
     } catch (error) {
       console.error('Failed to react', error);
     }
@@ -107,7 +107,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   const handleRepost = async () => {
     setRepostModalVisible(false);
     try {
-      await SyncEngine.toggleReaction(post.id, 'REPOST');
+      await SyncEngine.toggleReaction(resolvedDisplayPost.id, 'REPOST');
     } catch (error) {
       console.error('Failed to repost', error);
     }
@@ -227,7 +227,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
               </View>
             ) : null}
             <ReactionBar
-              postId={post.id}
+              postId={resolvedDisplayPost.id}
               onComment={handleComment}
               onRepost={() => setRepostModalVisible(true)}
               onReaction={handleReaction}

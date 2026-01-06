@@ -137,6 +137,9 @@ export default function FeedScreen() {
           onRefresh={handleRefresh}
           onLoadMore={handleLoadMore}
           refreshing={refreshing}
+          emptyTitle="What's happening?"
+          emptyDescription="When you follow people, their posts will show up here. For now, check out the Explore tab!"
+          emptyIcon="planet-outline"
         />
       )}
       <FAB />

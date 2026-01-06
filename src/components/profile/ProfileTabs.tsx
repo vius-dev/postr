@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ScrollView } from
 
 import { useTheme } from '@/theme/theme';
 
-export type ProfileTab = 'Posts' | 'Replies' | 'Media' | 'Dis/Likes' | 'Following' | 'Followers' | 'Bookmark';
+export type ProfileTab = 'Posts' | 'Replies' | 'Media' | 'Dis/Likes' | 'Following' | 'Followers';
 
 interface ProfileTabsProps {
   selectedTab: ProfileTab;
@@ -11,7 +11,7 @@ interface ProfileTabsProps {
   isOwner?: boolean;
 }
 
-const tabs: ProfileTab[] = ['Posts', 'Replies', 'Media', 'Dis/Likes', 'Bookmark'];
+const tabs: ProfileTab[] = ['Posts', 'Replies', 'Media', 'Dis/Likes'];
 
 export default function ProfileTabs({ selectedTab, onSelectTab, isOwner }: ProfileTabsProps) {
   const { theme } = useTheme();

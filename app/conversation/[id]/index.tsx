@@ -12,6 +12,7 @@ import ConversationHeader from '@/components/ConversationHeader';
 import { eventEmitter } from '@/lib/EventEmitter';
 import PinnedMessageBanner from '@/components/PinnedMessageBanner';
 import { useAuth } from '@/providers/AuthProvider';
+import { User } from '@/types/user';
 
 export default function ConversationScreen() {
     const { theme } = useTheme();
@@ -21,6 +22,7 @@ export default function ConversationScreen() {
     const [conversation, setConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
+    const [typingUsers, setTypingUsers] = useState<string[]>([]);
     const flatListRef = useRef<FlatList>(null);
 
     const loadConversation = useCallback(async () => {
@@ -66,20 +68,31 @@ export default function ConversationScreen() {
             }
         };
 
+        const handleTypingUpdate = (allTyping: Record<string, string[]>) => {
+            if (typeof conversationId === 'string' && allTyping[conversationId]) {
+                // Filter out current user
+                setTypingUsers(allTyping[conversationId].filter(uid => uid !== currentUser?.id));
+            } else {
+                setTypingUsers([]);
+            }
+        };
+
         eventEmitter.on('newMessage', handleNewMessage);
         eventEmitter.on('conversationUpdated', handleConversationUpdate);
+        eventEmitter.on('typingUpdate', handleTypingUpdate);
 
         return () => {
             eventEmitter.off('newMessage', handleNewMessage);
             eventEmitter.off('conversationUpdated', handleConversationUpdate);
+            eventEmitter.off('typingUpdate', handleTypingUpdate);
         };
     }, [loadConversation, conversationId]);
 
-    const handleSendMessage = async (text: string) => {
+    const handleSendMessage = async (text: string, media?: any[]) => {
         if (typeof conversationId !== 'string') return;
 
         try {
-            const newMessage = await api.sendMessage(conversationId, text);
+            const newMessage = await api.sendMessage(conversationId, text, media);
             setMessages(prev => [newMessage, ...prev]);
         } catch (error) {
             console.error('Error sending message:', error);
@@ -157,6 +170,15 @@ export default function ConversationScreen() {
                     inverted
                     contentContainerStyle={styles.listContainer}
                 />
+                {typingUsers.length > 0 && (
+                    <View style={styles.typingIndicator}>
+                        <Text style={[styles.typingText, { color: theme.textSecondary }]}>
+                            {typingUsers.length === 1
+                                ? `${conversation.participants.find(p => p.id === typingUsers[0])?.name || 'Someone'} is typing...`
+                                : `${typingUsers.length} people are typing...`}
+                        </Text>
+                    </View>
+                )}
                 <MessageInput onSend={handleSendMessage} conversation={conversation} />
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -169,5 +191,13 @@ const styles = StyleSheet.create({
     },
     listContainer: {
         paddingHorizontal: 10,
+    },
+    typingIndicator: {
+        paddingHorizontal: 20,
+        paddingVertical: 5,
+    },
+    typingText: {
+        fontSize: 12,
+        fontStyle: 'italic',
     },
 });

@@ -150,7 +150,14 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
   const user = session?.user;
   if (!user) return posts;
 
-  const postIds = posts.map(p => p.id);
+  // Collect all unique IDs that might have user engagement (posts + their original sources)
+  const allTargetIds = new Set<string>();
+  posts.forEach(p => {
+    allTargetIds.add(p.id);
+    if (p.repostedPostId) allTargetIds.add(p.repostedPostId);
+    if (p.quotedPostId) allTargetIds.add(p.quotedPostId);
+  });
+  const targetIds = Array.from(allTargetIds);
 
   try {
     const [reactions, bookmarks, pollVotes, reposts] = await Promise.all([
@@ -158,59 +165,64 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
         .from('post_reactions')
         .select('subject_id, type')
         .eq('actor_id', user.id)
-        .in('subject_id', postIds),
+        .in('subject_id', targetIds),
       supabase
         .from('bookmarks')
         .select('post_id')
         .eq('user_id', user.id)
-        .in('post_id', postIds),
+        .in('post_id', targetIds),
       supabase
         .from('poll_votes')
         .select('post_id, choice_index')
         .eq('user_id', user.id)
-        .in('post_id', postIds),
+        .in('post_id', targetIds),
       supabase
         .from('posts')
         .select('reposted_post_id')
         .eq('owner_id', user.id)
         .eq('type', 'repost')
-        .in('reposted_post_id', postIds)
+        .in('reposted_post_id', targetIds)
     ]);
 
-    // OPTIMISTIC VOTE MERGE: Check local DB for pending votes
+    // OPTIMISTIC SYNC: Check local DB for reactions, reposts, and poll votes
+    let localReactions: any[] = [];
     let localVotes: any[] = [];
+    const localRepostSet = new Set<string>();
+
     try {
       const db = await getDb();
-      if (postIds.length > 0) {
-        const placeholders = postIds.map(() => '?').join(',');
+      if (targetIds.length > 0) {
+        const placeholders = targetIds.map(() => '?').join(',');
+
+        // 1. Fetch local reactions
+        localReactions = await db.getAllAsync(
+          `SELECT post_id, reaction_type FROM reactions WHERE user_id = ? AND post_id IN (${placeholders})`,
+          [user.id, ...targetIds]
+        );
+
+        // 2. Fetch local poll votes
         localVotes = await db.getAllAsync(
           `SELECT post_id, choice_index FROM poll_votes WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [user.id, ...postIds]
+          [user.id, ...targetIds]
         );
-      }
-    } catch (e) {
-      console.warn('Failed to fetch local votes for hydration', e);
-    }
 
-    const reactionMap = new Map(reactions.data?.map((r: any) => [r.subject_id, r.type]) || []);
-    const bookmarkSet = new Set(bookmarks.data?.map((b: any) => b.post_id) || []);
-    const serverRepostSet = new Set((reposts as any).data?.map((r: any) => r.reposted_post_id) || []);
-
-    // OPTIMISTIC SYNC: Check local DB for is_reposted flag
-    const localRepostSet = new Set<string>();
-    try {
-      const db = await getDb();
-      if (postIds.length > 0) {
-        const placeholders = postIds.map(() => '?').join(',');
+        // 3. Fetch local reposts (is_reposted flag)
         const localIsReposted = await db.getAllAsync(
-          `SELECT id FROM posts WHERE is_reposted = 1 AND id IN (${placeholders})`,
-          postIds
+          `SELECT id FROM posts WHERE (is_reposted = 1 OR type = 'repost') AND owner_id = ? AND id IN (${placeholders})`,
+          [user.id, ...targetIds]
         ) as any[];
         localIsReposted.forEach(r => localRepostSet.add(r.id));
       }
     } catch (e) {
-      console.warn('Failed to fetch local repost status', e);
+      console.warn('Failed to fetch local state for hydration', e);
     }
+
+    // Merge Reaction Maps (Local takes precedence for optimistic UI)
+    const reactionMap = new Map(reactions.data?.map((r: any) => [r.subject_id, r.type]) || []);
+    localReactions.forEach(r => reactionMap.set(r.post_id, r.reaction_type));
+
+    const bookmarkSet = new Set(bookmarks.data?.map((b: any) => b.post_id) || []);
+    const serverRepostSet = new Set((reposts as any).data?.map((r: any) => r.reposted_post_id) || []);
 
     // Server votes (assumed to be reflected in the post's poll_json counts already if synced)
     const serverVoteMap = new Map(pollVotes.data?.map((v: any) => [v.post_id, v.choice_index]) || []);
@@ -222,9 +234,19 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
     });
 
     return posts.map(p => {
+      // Normalization: Determine engagement based on either the post itself or its original source
+      const sourceId = p.repostedPostId || p.quotedPostId || p.id;
+
+      // Determine reaction: Check p.id first, then sourceId
+      const reactionValue = reactionMap.get(p.id) || reactionMap.get(sourceId) || 'NONE';
+      const isBookmarked = bookmarkSet.has(p.id) || bookmarkSet.has(sourceId);
+      const isReposted = serverRepostSet.has(p.id) || serverRepostSet.has(sourceId) ||
+        localRepostSet.has(p.id) || localRepostSet.has(sourceId) ||
+        reactionValue === 'REPOST';
+
       // Determine vote index: Local takes precedence
-      const localIdx = localVoteMap.get(p.id);
-      const serverIdx = serverVoteMap.get(p.id);
+      const localIdx = localVoteMap.get(p.id) || localVoteMap.get(sourceId);
+      const serverIdx = serverVoteMap.get(p.id) || serverVoteMap.get(sourceId);
       const userVoteIndex = localIdx !== undefined ? localIdx : serverIdx;
 
       // If we have a local vote that IS NOT on the server, we assume the server count 
@@ -251,12 +273,12 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
         ...p,
         viewer: {
           ...p.viewer,
-          reaction: (reactionMap.get(p.id) as ReactionAction) || 'NONE',
-          hasLiked: reactionMap.get(p.id) === 'LIKE',
-          hasDisliked: reactionMap.get(p.id) === 'DISLIKE',
-          hasLaughed: reactionMap.get(p.id) === 'LAUGH',
-          isBookmarked: bookmarkSet.has(p.id),
-          isReposted: serverRepostSet.has(p.id) || localRepostSet.has(p.id) || reactionMap.get(p.id) === 'REPOST',
+          reaction: reactionValue as ReactionAction,
+          hasLiked: reactionValue === 'LIKE',
+          hasDisliked: reactionValue === 'DISLIKE',
+          hasLaughed: reactionValue === 'LAUGH',
+          isBookmarked,
+          isReposted,
           userVoteIndex
         },
         poll
@@ -970,7 +992,7 @@ export const api = {
       text: m.content,
       createdAt: m.created_at,
       isRead: m.created_at <= lastReadAt,
-      media: m.media,
+      media: m.media_url ? [{ url: m.media_url, type: m.type === 'IMAGE' ? 'image' : 'video' }] : [],
       sender: m.sender,
       reactions: (m.reactions || []).reduce((acc: any, r: any) => {
         acc[r.emoji] = (acc[r.emoji] || 0) + 1;
@@ -980,22 +1002,31 @@ export const api = {
   },
 
   sendMessage: async (conversationId: string, text: string, media?: any[]): Promise<Message> => {
-    validateContent(text, 10000);
+    if (text) validateContent(text, 10000);
 
     const user = await getAuthenticatedUser();
+    const mediaUrl = media && media.length > 0 ? media[0].url || media[0].uri : null;
 
     const { data, error } = await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
         sender_id: user.id,
-        content: text
+        content: text,
+        media_url: mediaUrl,
+        type: mediaUrl ? 'IMAGE' : 'TEXT'
       })
       .select('*, sender:profiles!messages_sender_id_fkey(*)')
       .single();
 
     if (error) throw error;
-    return data as unknown as Message;
+    return {
+      ...data,
+      text: data.content,
+      senderId: data.sender_id,
+      sender: data.sender,
+      media: data.media_url ? [{ url: data.media_url, type: data.type === 'IMAGE' ? 'image' : 'video' }] : []
+    } as unknown as Message;
   },
 
   markConversationAsRead: async (conversationId: string): Promise<void> => {
@@ -1404,6 +1435,30 @@ export const api = {
     if (error) throw error;
   },
 
+  getMutedUsers: async (): Promise<User[]> => {
+    const user = await getAuthenticatedUser();
+
+    const { data, error } = await supabase
+      .from('mutes')
+      .select('muted:profiles!muted_id(*)')
+      .eq('muter_id', user.id);
+
+    if (error) throw error;
+    return data.map((m: any) => mapProfile(m.muted)).filter(Boolean) as User[];
+  },
+
+  getBlockedUsers: async (): Promise<User[]> => {
+    const user = await getAuthenticatedUser();
+
+    const { data, error } = await supabase
+      .from('blocks')
+      .select('blocked:profiles!blocked_id(*)')
+      .eq('blocker_id', user.id);
+
+    if (error) throw error;
+    return data.map((b: any) => mapProfile(b.blocked)).filter(Boolean) as User[];
+  },
+
   getFollowing: async (userId?: string): Promise<User[]> => {
     const id = userId || (await getAuthenticatedUser()).id;
 
@@ -1414,6 +1469,64 @@ export const api = {
 
     if (error) throw error;
     return data.map((f: any) => mapProfile(f.target)).filter(Boolean) as User[];
+  },
+
+  getSuggestedUsers: async (limit: number = 5): Promise<User[]> => {
+    const currentUser = await api.getCurrentUser();
+    if (!currentUser) return [];
+
+    // 1. Get IDs of users explicitly followed
+    const { data: followingData } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentUser.id);
+
+    const followingIds = new Set((followingData || []).map((f: any) => f.following_id));
+    followingIds.add(currentUser.id); // Exclude self
+
+    // 2. Fetch profiles (naive approach for MVP: fetch top 50 then filter)
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) return [];
+
+    const suggestions = profiles
+      .filter((p: any) => !followingIds.has(p.id))
+      .slice(0, limit);
+
+    return suggestions.map(mapProfile).filter(Boolean) as User[];
+  },
+
+  followUser: async (userId: string) => {
+    const currentUser = await api.getCurrentUser();
+    if (!currentUser) return;
+
+    const { error } = await supabase
+      .from('follows')
+      .insert({
+        follower_id: currentUser.id,
+        following_id: userId
+      });
+
+    if (error) throw error;
+  },
+
+  unfollowUser: async (userId: string) => {
+    const currentUser = await api.getCurrentUser();
+    if (!currentUser) return;
+
+    const { error } = await supabase
+      .from('follows')
+      .delete()
+      .match({
+        follower_id: currentUser.id,
+        following_id: userId
+      });
+
+    if (error) throw error;
   },
 
   getFollowers: async (userId: string): Promise<User[]> => {

@@ -148,6 +148,16 @@ const SettingsScreen = () => {
                         onPress={() => router.push('/(settings)/privacy')}
                     />
                     <SettingsItem
+                        icon="volume-mute-outline"
+                        title="Muted accounts"
+                        onPress={() => router.push('/(settings)/muted')}
+                    />
+                    <SettingsItem
+                        icon="ban-outline"
+                        title="Blocked accounts"
+                        onPress={() => router.push('/(settings)/blocked')}
+                    />
+                    <SettingsItem
                         icon="notifications-outline"
                         title="Notifications"
                         subtitle="Select the kinds of notifications you get about your activities, interests, and recommendations"

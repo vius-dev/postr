@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Message, Conversation } from '@/types/message';
 import { useTheme } from '@/theme/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -116,6 +116,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           {senderName} {isMe ? '->' : '<-'} {recipientName}
         </Text>
         {renderTextWithMentions(message.text, isMe ? 'white' : theme.textPrimary)}
+        {message.media && message.media.length > 0 && (
+          <Image
+            source={{ uri: message.media[0].url }}
+            style={styles.messageImage}
+            resizeMode="cover"
+          />
+        )}
         {message.reactions && (
           <View style={[styles.reactionsRow, { marginTop: 4 }]}>
             {Object.entries(message.reactions).map(([emoji, count]) => (
@@ -142,6 +149,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginVertical: 4,
     maxWidth: '80%',
+  },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    marginTop: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   myMessage: {
     alignSelf: 'flex-end',

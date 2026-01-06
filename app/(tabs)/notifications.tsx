@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
+import EmptyState from '@/components/EmptyState';
 import { Notification } from '@/types/notification';
 import NotificationItem from '@/components/NotificationItem';
 import { Ionicons } from '@expo/vector-icons';
@@ -109,11 +110,11 @@ export default function NotificationsScreen() {
         refreshing={loading}
         onRefresh={loadNotifications}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              {activeTab === 'ALL' ? 'Nothing to see here.' : 'When someone mentions you, you’ll find it here.'}
-            </Text>
-          </View>
+          <EmptyState
+            title={activeTab === 'ALL' ? 'Nothing to see here.' : 'No mentions yet'}
+            description={activeTab === 'ALL' ? 'When people interact with your posts, you\'ll find those notifications here.' : 'When someone mentions you, you’ll find it here.'}
+            icon={activeTab === 'ALL' ? 'notifications-off-outline' : 'at-outline'}
+          />
         }
       />
     </SafeAreaView>

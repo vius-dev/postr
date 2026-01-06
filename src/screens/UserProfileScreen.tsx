@@ -20,6 +20,10 @@ import { getDb } from '@/lib/db/sqlite';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
 import { isSelf } from '@/state/auth';
 import { PostPipeline } from '@/domain/post/post.pipeline';
+import ActionSheet from '@/components/ActionSheet';
+import ReportModal from '@/components/modals/ReportModal';
+import { ReportType } from '@/types/reports';
+import { useToast } from '@/providers/ToastProvider';
 
 
 export default function UserProfileScreen() {
@@ -36,8 +40,10 @@ export default function UserProfileScreen() {
   const [replies, setReplies] = useState<Post[]>([]);
   const [media, setMedia] = useState<Post[]>([]);
   const [reactions, setReactions] = useState<Post[]>([]);
-  const [bookmarks, setBookmarks] = useState<Post[]>([]);
+  const [isActionSheetVisible, setActionSheetVisible] = useState(false);
+  const [isReportModalVisible, setReportModalVisible] = useState(false);
   const { theme } = useTheme();
+  const { showToast } = useToast();
   const router = useRouter();
   const { username: paramUsername } = useLocalSearchParams();
 
@@ -224,16 +230,6 @@ export default function UserProfileScreen() {
         } finally {
           setIsListLoading(false);
         }
-      } else if (selectedTab === 'Bookmark' && bookmarks.length === 0) {
-        setIsListLoading(true);
-        try {
-          const data = await api.getBookmarks();
-          setBookmarks(data);
-        } catch (error) {
-          console.error("Failed to fetch bookmarks", error);
-        } finally {
-          setIsListLoading(false);
-        }
       } else if (selectedTab === 'Posts') {
         // Always refresh posts if we come back to this tab and it might have changed?
         // Or just let it be. For now, we've pre-fetched them on user load.
@@ -249,7 +245,6 @@ export default function UserProfileScreen() {
       setReplies(prev => prev.filter(filter));
       setMedia(prev => prev.filter(filter));
       setReactions(prev => prev.filter(filter));
-      setBookmarks(prev => prev.filter(filter));
     };
 
     eventEmitter.on('postDeleted', handlePostDeleted);
@@ -329,6 +324,82 @@ export default function UserProfileScreen() {
     }
   };
 
+  const handleMoreOptions = () => {
+    setActionSheetVisible(true);
+  };
+
+  const handleActionSheetSelect = async (option: { id: string, label: string }) => {
+    if (!user) return;
+
+    try {
+      switch (option.id) {
+        case 'mute':
+          await api.muteUser(user.id);
+          setRelationship(prev => prev ? { ...prev, type: 'MUTED' } : null);
+          showToast({ message: `@${user.username} has been muted`, type: 'success' });
+          break;
+        case 'unmute':
+          await api.unmuteUser(user.id);
+          const newRelUnmute = await api.getUserRelationship(user.id);
+          setRelationship(newRelUnmute);
+          showToast({ message: `@${user.username} has been unmuted`, type: 'success' });
+          break;
+        case 'block':
+          await api.blockUser(user.id);
+          setRelationship(prev => prev ? { ...prev, type: 'BLOCKED' } : null);
+          showToast({ message: `@${user.username} has been blocked`, type: 'success' });
+          break;
+        case 'unblock':
+          await api.unblockUser(user.id);
+          const newRelUnblock = await api.getUserRelationship(user.id);
+          setRelationship(newRelUnblock);
+          showToast({ message: `@${user.username} has been unblocked`, type: 'success' });
+          break;
+        case 'report':
+          setReportModalVisible(true);
+          break;
+      }
+    } catch (error) {
+      showToast({ message: 'Action failed. Please try again.', type: 'error' });
+    }
+  };
+
+  const handleReportSubmit = async (reportType: ReportType, reason?: string) => {
+    if (!user) return;
+    try {
+      await api.createReport('USER', user.id, reportType, currentUser?.id || '', reason || '');
+      showToast({ message: 'User Reported. Thank you.', type: 'success' });
+    } catch (error) {
+      showToast({ message: 'Failed to submit report.', type: 'error' });
+    } finally {
+      setReportModalVisible(false);
+    }
+  };
+
+  const getActionSheetOptions = () => {
+    if (!relationship) return [];
+
+    if (relationship.type === 'BLOCKED') {
+      return [
+        { id: 'unblock', label: `Unblock @${user?.username}` },
+        { id: 'report', label: 'Report User', destructive: true },
+      ];
+    }
+
+    const options = [];
+
+    if (relationship.type === 'MUTED') {
+      options.push({ id: 'unmute', label: `Unmute @${user?.username}` });
+    } else {
+      options.push({ id: 'mute', label: `Mute @${user?.username}` });
+    }
+
+    options.push({ id: 'block', label: `Block @${user?.username}`, destructive: true });
+    options.push({ id: 'report', label: 'Report User', destructive: true });
+
+    return options;
+  };
+
   const ListHeader = (
     <View>
       {user && (
@@ -341,8 +412,8 @@ export default function UserProfileScreen() {
                 onFollow={handleFollow}
                 onUnfollow={handleUnfollow}
                 onEditProfile={() => router.push('/edit')}
-                onSettings={() => router.push('/(settings)/settings')}
                 isLoading={isFollowingLoading}
+                onMoreOptions={handleMoreOptions}
                 style={{ paddingHorizontal: 0 }}
               />
             )
@@ -356,8 +427,8 @@ export default function UserProfileScreen() {
         followerCount={followers.length}
         activeTab={selectedTab}
         onPostsPress={() => setSelectedTab('Posts')}
-        onFollowingPress={() => setSelectedTab('Following')}
-        onFollowersPress={() => setSelectedTab('Followers')}
+        onFollowingPress={() => router.push(`/(profile)/${user.username}/following`)}
+        onFollowersPress={() => router.push(`/(profile)/${user.username}/followers`)}
       />}
       <ProfileTabs
         selectedTab={selectedTab}
@@ -384,7 +455,7 @@ export default function UserProfileScreen() {
   const renderUserItem = ({ item }: { item: User }) => (
     <TouchableOpacity
       style={[styles.userItem, { borderBottomColor: theme.borderLight }]}
-      onPress={() => router.push(`/ (profile) / ${item.username}`)}
+      onPress={() => router.push(`/(profile)/${item.username}`)}
     >
       <Image source={{ uri: item.avatar }} style={styles.listAvatar} />
       <View style={styles.userInfo}>
@@ -402,7 +473,6 @@ export default function UserProfileScreen() {
       case 'Replies': return replies;
       case 'Media': return media;
       case 'Dis/Likes': return reactions;
-      case 'Bookmark': return bookmarks;
       case 'Posts': return posts;
       default: return [];
     }
@@ -431,6 +501,17 @@ export default function UserProfileScreen() {
           )
         }
         showsVerticalScrollIndicator={false}
+      />
+      <ActionSheet
+        visible={isActionSheetVisible}
+        onClose={() => setActionSheetVisible(false)}
+        onSelect={handleActionSheetSelect}
+        options={getActionSheetOptions()}
+      />
+      <ReportModal
+        visible={isReportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        onSubmit={handleReportSubmit}
       />
     </SafeAreaView>
   );

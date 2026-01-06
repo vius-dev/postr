@@ -11,8 +11,10 @@ import { User } from '@/types/user';
 import { useRouter } from 'expo-router';
 import ExploreSearchBar from '@/components/ExploreSearchBar';
 import ForYouFeed from '@/components/ForYouFeed';
+import EmptyState from '@/components/EmptyState';
 import { useExploreSettings } from '@/state/exploreSettings';
 import { eventEmitter } from '@/lib/EventEmitter';
+import { WhoToFollow } from '@/components/discovery/WhoToFollow';
 
 export default function ExploreScreen() {
   const { theme } = useTheme();
@@ -24,6 +26,7 @@ export default function ExploreScreen() {
   const [trends, setTrends] = useState<{ hashtag: string, count: number }[]>([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [visibleTrendsCount, setVisibleTrendsCount] = useState(5);
+  const [searchTab, setSearchTab] = useState<'Latest' | 'People'>('Latest');
 
   React.useEffect(() => {
     const fetchTrends = async () => {
@@ -94,19 +97,47 @@ export default function ExploreScreen() {
   );
 
   const renderSearchResult = () => {
-    if (searchResults.users.length === 0 && searchResults.posts.length === 0) {
+    const hasPosts = searchResults.posts.length > 0;
+    const hasUsers = searchResults.users.length > 0;
+    const isEmpty = searchTab === 'Latest' ? !hasPosts : !hasUsers;
+
+    if (isEmpty) {
       return (
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No results for "{searchQuery}"</Text>
-        </View>
+        <EmptyState
+          title={`No ${searchTab.toLowerCase()} for "${searchQuery}"`}
+          description={`Try searching for something else.`}
+          icon="search-outline"
+        />
       );
     }
 
     return (
-      <ScrollView style={styles.resultsScroll}>
-        {searchResults.users.length > 0 && (
-          <View style={[styles.section, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>People</Text>
+      <ScrollView style={styles.resultsScroll} stickyHeaderIndices={[0]}>
+        <View style={{ backgroundColor: theme.background }}>
+          <View style={[styles.tabsRow, { borderBottomColor: theme.borderLight }]}>
+            {['Latest', 'People'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tabItem,
+                  searchTab === tab && { borderBottomColor: theme.primary, borderBottomWidth: 2 }
+                ]}
+                onPress={() => setSearchTab(tab as any)}
+              >
+                <Text style={[
+                  styles.tabText,
+                  { color: searchTab === tab ? theme.textPrimary : theme.textTertiary },
+                  searchTab === tab && { fontWeight: 'bold' }
+                ]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {searchTab === 'People' && hasUsers && (
+          <View style={styles.section}>
             {searchResults.users.map(user => (
               <TouchableOpacity
                 key={user.id}
@@ -122,9 +153,8 @@ export default function ExploreScreen() {
             ))}
           </View>
         )}
-        {searchResults.posts.length > 0 && (
+        {searchTab === 'Latest' && hasPosts && (
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.textPrimary, paddingBottom: 10 }]}>Latest</Text>
             {searchResults.posts.map(post => (
               <PostCard key={post.id} post={post} />
             ))}
@@ -158,6 +188,7 @@ export default function ExploreScreen() {
         <ForYouFeed
           header={
             <>
+              <WhoToFollow />
               <View style={styles.trendsSection}>
                 <Text style={[styles.trendsTitle, { color: theme.textPrimary }]}>
                   {personalizeTrends ? 'Trends for you' : `Trending in ${showLocationContent ? 'Your Location' : explorationLocation}`}
@@ -211,6 +242,18 @@ const styles = StyleSheet.create({
   },
   resultsScroll: {
     flex: 1,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  tabText: {
+    fontSize: 15,
   },
   section: {
     paddingVertical: 12,
