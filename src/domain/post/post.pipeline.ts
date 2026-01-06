@@ -84,6 +84,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     user_vote_index: source.user_vote_index,
                 },
                 parent_id: source.parent_id,
+                reply_to_username: source.parent_author_username || source.reply_to_username,
                 quoted_post_id: quotedId,
                 reposted_post_id: repostedId,
                 // Recursive adaptation for quoted/reposted if joined as row prefixes
@@ -178,6 +179,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
                     user_vote_index: source.poll?.userVoteIndex || source.viewer?.userVoteIndex,
                 },
                 parent_id: source.parent_id || source.parentPostId,
+                reply_to_username: source.parent_post?.author?.username || source.parentPost?.author?.username || source.reply_to_username,
                 quoted_post_id: source.quoted_post_id || source.quotedPostId,
                 reposted_post_id: source.reposted_post_id || source.repostedPostId,
                 quoted_post: source.quoted_post ? this.adapt(source.quoted_post) : null,
@@ -261,6 +263,7 @@ export const PostPipeline = createDomainPipeline<any, RawPost, Post>({
             repostedPost: raw.reposted_post ? this.map(raw.reposted_post, ctx) : undefined,
 
             parentPostId: raw.parent_id || undefined,
+            replyToUsername: raw.reply_to_username || undefined,
             quotedPostId: raw.quoted_post_id || undefined,
             repostedPostId: raw.reposted_post_id || undefined,
             repostedBy: (raw.type === 'repost' && raw.reposted_post) ? {

@@ -15,6 +15,7 @@ import { Post, ReactionAction } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import { useRealtime } from '@/realtime/RealtimeContext';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
+import { Linking } from 'react-native';
 import Card from '@/components/Card'; // Import the new Card component
 import { timeAgo } from '@/utils/time'; // Import a time formatting utility
 import MediaGrid from '@/components/MediaGrid';
@@ -25,9 +26,10 @@ import { isAuthorityActive } from '@/utils/user';
 interface PostCardProps {
   post: Post;
   isFocal?: boolean;
+  showThreadLine?: boolean;
 }
 
-export default function PostCard({ post, isFocal = false }: PostCardProps) {
+export default function PostCard({ post, isFocal = false, showThreadLine = false }: PostCardProps) {
   const router = useRouter();
   const { theme } = useTheme();
 
@@ -119,7 +121,15 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   };
 
   const handleMentionPress = (mention: string) => router.push(`/(profile)/${mention.substring(1)}`);
-  const handleHashtagPress = (hashtag: string) => router.push(`/(feed)/hashtag/${hashtag.substring(1)}`);
+  const handleHashtagPress = (hashtag: string) => {
+    router.push(`/explore?q=${encodeURIComponent(hashtag)}`);
+  };
+
+  const handleUrlPress = (url: string) => {
+    // Sanitize URL (add https if missing)
+    const sanitizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    Linking.openURL(sanitizedUrl).catch(err => console.error("Failed to open URL:", err));
+  };
   const goToProfile = () => router.push(`/(profile)/${post.author.username}`);
   const goToPost = () => !isFocal && router.push(`/post/${post.id}`);
 
@@ -127,9 +137,19 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
   return (
     <Card>
       <View style={styles.container}>
-        <TouchableOpacity onPress={goToProfile} activeOpacity={0.7}>
-          <Image source={{ uri: post.author.avatar }} style={styles.avatar} contentFit="cover" transition={200} />
-        </TouchableOpacity>
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={goToProfile}>
+            <Image
+              source={{ uri: post.author.avatar }}
+              style={[styles.avatar, { backgroundColor: theme.surface }]}
+              contentFit="cover"
+              transition={200}
+            />
+          </TouchableOpacity>
+          {showThreadLine && (
+            <View style={[styles.threadLine, { backgroundColor: theme.borderLight }]} />
+          )}
+        </View>
 
         <View style={styles.mainContent}>
           {post.repostedBy && (
@@ -166,6 +186,14 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
                 <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
+
+            {resolvedDisplayPost.replyToUsername && !isFocal && (
+              <View style={styles.replyingTo}>
+                <Text style={[styles.replyingToText, { color: theme.textTertiary }]}>
+                  Replying to <Text style={{ color: theme.primary }}>@{resolvedDisplayPost.replyToUsername}</Text>
+                </Text>
+              </View>
+            )}
           </Card.Header>
 
           <Card.Content>
@@ -176,6 +204,7 @@ export default function PostCard({ post, isFocal = false }: PostCardProps) {
                   parse={[
                     { pattern: /@(\w+)/, style: [styles.mention, { color: theme.link }], onPress: handleMentionPress },
                     { pattern: /#(\w+)/, style: [styles.hashtag, { color: theme.link }], onPress: handleHashtagPress },
+                    { type: 'url', style: [styles.url, { color: theme.link }], onPress: handleUrlPress },
                   ]}
                 >
                   {resolvedDisplayPost.content}
@@ -337,6 +366,9 @@ const styles = StyleSheet.create({
   hashtag: {
     fontWeight: 'normal',
   },
+  url: {
+    textDecorationLine: 'underline',
+  },
   focalMetadata: {
     paddingVertical: 12,
     marginTop: 12,
@@ -362,5 +394,22 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 15,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  threadLine: {
+    flex: 1,
+    width: 2,
+    marginTop: 4,
+    borderRadius: 1,
+  },
+  replyingTo: {
+    marginTop: 1,
+    marginBottom: 4,
+  },
+  replyingToText: {
+    fontSize: 13,
   },
 });

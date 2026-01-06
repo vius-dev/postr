@@ -34,6 +34,7 @@ export interface RawPost extends RawEntity {
     };
 
     parent_id?: string | null;
+    reply_to_username?: string | null;
     quoted_post_id?: string | null;
     reposted_post_id?: string | null;
 

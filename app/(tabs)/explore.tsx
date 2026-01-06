@@ -26,7 +26,7 @@ export default function ExploreScreen() {
   const [trends, setTrends] = useState<{ hashtag: string, count: number }[]>([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [visibleTrendsCount, setVisibleTrendsCount] = useState(5);
-  const [searchTab, setSearchTab] = useState<'Latest' | 'People'>('Latest');
+  const [searchTab, setSearchTab] = useState<'Latest' | 'People' | 'Media'>('Latest');
 
   React.useEffect(() => {
     const fetchTrends = async () => {
@@ -99,7 +99,10 @@ export default function ExploreScreen() {
   const renderSearchResult = () => {
     const hasPosts = searchResults.posts.length > 0;
     const hasUsers = searchResults.users.length > 0;
-    const isEmpty = searchTab === 'Latest' ? !hasPosts : !hasUsers;
+    const mediaPosts = searchResults.posts.filter(p => (p.media?.length ?? 0) > 0);
+    const hasMedia = mediaPosts.length > 0;
+
+    const isEmpty = searchTab === 'Latest' ? !hasPosts : (searchTab === 'People' ? !hasUsers : !hasMedia);
 
     if (isEmpty) {
       return (
@@ -115,7 +118,7 @@ export default function ExploreScreen() {
       <ScrollView style={styles.resultsScroll} stickyHeaderIndices={[0]}>
         <View style={{ backgroundColor: theme.background }}>
           <View style={[styles.tabsRow, { borderBottomColor: theme.borderLight }]}>
-            {['Latest', 'People'].map((tab) => (
+            {['Latest', 'People', 'Media'].map((tab) => (
               <TouchableOpacity
                 key={tab}
                 style={[
@@ -156,6 +159,13 @@ export default function ExploreScreen() {
         {searchTab === 'Latest' && hasPosts && (
           <View style={styles.section}>
             {searchResults.posts.map(post => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </View>
+        )}
+        {searchTab === 'Media' && hasMedia && (
+          <View style={styles.section}>
+            {mediaPosts.map(post => (
               <PostCard key={post.id} post={post} />
             ))}
           </View>

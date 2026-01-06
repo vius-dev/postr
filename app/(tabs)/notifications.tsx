@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
@@ -24,9 +24,12 @@ export default function NotificationsScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('ALL');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    loadNotifications();
+    loadNotifications(true);
     loadSettings();
   }, []);
 
@@ -40,15 +43,32 @@ export default function NotificationsScreen() {
     }
   };
 
-  const loadNotifications = async () => {
-    setLoading(true);
+  const loadNotifications = async (initial = false) => {
+    if (initial) {
+      setLoading(true);
+    } else {
+      if (loadingMore || !hasMore) return;
+      setLoadingMore(true);
+    }
+
     try {
-      const data = await api.getNotifications();
-      setNotifications(data);
+      const res = await api.getNotifications({
+        cursor: initial ? undefined : nextCursor,
+        limit: 20
+      });
+
+      if (initial) {
+        setNotifications(res.notifications);
+      } else {
+        setNotifications(prev => [...prev, ...res.notifications]);
+      }
+      setNextCursor(res.nextCursor);
+      setHasMore(res.hasMore);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -107,8 +127,15 @@ export default function NotificationsScreen() {
         data={filteredNotifications}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <NotificationItem notification={item} />}
-        refreshing={loading}
-        onRefresh={loadNotifications}
+        refreshing={loading && notifications.length > 0}
+        onRefresh={() => loadNotifications(true)}
+        onEndReached={() => loadNotifications(false)}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator style={{ marginVertical: 20 }} color={theme.primary} />
+          ) : null
+        }
         ListEmptyComponent={
           <EmptyState
             title={activeTab === 'ALL' ? 'Nothing to see here.' : 'No mentions yet'}

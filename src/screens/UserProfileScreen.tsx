@@ -145,7 +145,8 @@ export default function UserProfileScreen() {
     };
 
     // Listen for updates
-    const handleUpdate = async (updatedUserId: string) => {
+    const handleUpdate = async (payload: any) => {
+      const updatedUserId = typeof payload === 'string' ? payload : payload.userId;
       const usernameToFetch = (paramUsername as string) || currentUser?.id;
       if (!usernameToFetch) return;
 

@@ -94,7 +94,7 @@ export default function NotificationItem({ notification }: NotificationItemProps
                 { borderBottomColor: theme.border, backgroundColor: theme.background },
                 !notification.isRead && { backgroundColor: theme.surface }
             ]}
-            onPress={() => notification.postId && router.push(`/post/${notification.postId}`)}
+            onPress={() => notification.postId && router.push(`/post/${notification.postId}?highlightId=${notification.postId}`)}
         >
             {renderContent()}
         </TouchableOpacity>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { api } from '@/lib/api';
@@ -26,21 +26,41 @@ export default function MessagesScreen() {
   const { mutedWords } = useNotificationsSettings();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
 
-  const loadConversations = useCallback(async () => {
-    setLoading(true);
+  const loadConversations = useCallback(async (initial = false) => {
+    if (initial) {
+      setLoading(true);
+    } else {
+      if (loadingMore || !hasMore) return;
+      setLoadingMore(true);
+    }
+
     try {
-      const data = await api.getConversations();
-      setConversations(data);
+      const res = await api.getConversations({
+        cursor: initial ? undefined : nextCursor,
+        limit: 20
+      });
+
+      if (initial) {
+        setConversations(res.conversations);
+      } else {
+        setConversations(prev => [...prev, ...res.conversations]);
+      }
+      setNextCursor(res.nextCursor);
+      setHasMore(res.hasMore);
     } catch (error) {
       console.error('Error loading conversations:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, []);
+  }, [nextCursor, hasMore, loadingMore]);
 
   const loadFollowing = useCallback(async () => {
     try {
@@ -56,15 +76,49 @@ export default function MessagesScreen() {
     loadFollowing();
 
     const handleConversationRead = () => {
-      loadConversations();
+      loadConversations(true);
+    };
+
+    const handleNewMessage = (payload: { conversationId: string, message: any }) => {
+      setConversations(prev => {
+        const index = prev.findIndex(c => c.id === payload.conversationId);
+        if (index > -1) {
+          // Move existing conversation to top and update snippet
+          const updated = [...prev];
+          const conv = { ...updated[index] };
+          conv.lastMessage = {
+            id: payload.message.id,
+            text: payload.message.text,
+            createdAt: payload.message.createdAt,
+            senderId: payload.message.senderId
+          };
+          conv.updatedAt = payload.message.createdAt;
+          // Only increment unread if it's not already read (this is simplified, 
+          // usually backend handles this but for instant UI we can increment)
+          if (payload.message.senderId !== currentUser?.id) {
+            conv.unreadCount = (conv.unreadCount || 0) + 1;
+          }
+
+          updated.splice(index, 1);
+          updated.unshift(conv);
+          return updated;
+        } else {
+          // If conversation not in list (might be on another page or brand new), 
+          // reload the first page to be sure
+          loadConversations(true);
+          return prev;
+        }
+      });
     };
 
     eventEmitter.on('conversationRead', handleConversationRead);
+    eventEmitter.on('newMessage', handleNewMessage);
 
     return () => {
       eventEmitter.off('conversationRead', handleConversationRead);
+      eventEmitter.off('newMessage', handleNewMessage);
     };
-  }, [loadConversations, loadFollowing]);
+  }, [loadConversations, currentUser?.id]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter(conv => {
@@ -204,8 +258,15 @@ export default function MessagesScreen() {
           if (item === 'channels') return renderSection('Channels', channels);
           return null;
         }}
-        refreshing={loading}
-        onRefresh={loadConversations}
+        refreshing={loading && conversations.length > 0}
+        onRefresh={() => loadConversations(true)}
+        onEndReached={() => loadConversations(false)}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator style={{ marginVertical: 20 }} color={theme.primary} />
+          ) : null
+        }
         ListEmptyComponent={
           <EmptyState
             title={searchQuery ? 'No results found' : 'Welcome to your inbox!'}

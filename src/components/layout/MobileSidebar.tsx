@@ -6,6 +6,8 @@ import { useTheme } from '@/theme/theme';
 import { SidebarItem } from './SidebarItem';
 import { useAuthStore } from '@/state/auth';
 import { useRouter } from 'expo-router';
+import { eventEmitter } from '@/lib/EventEmitter';
+import { Image } from 'react-native';
 
 interface MobileSidebarProps {
     onClose: () => void;
@@ -13,10 +15,26 @@ interface MobileSidebarProps {
 
 export const MobileSidebar = ({ onClose }: MobileSidebarProps) => {
     const { theme } = useTheme();
-    const { user } = useAuthStore();
+    const { user, setUser } = useAuthStore();
     const router = useRouter();
 
-    const username = user?.user_metadata?.username || 'devteam';
+    React.useEffect(() => {
+        const handleProfileUpdate = (payload: { userId: string, name: string, avatar: string | null }) => {
+            if (user && user.id === payload.userId) {
+                // Update local store state if needed, or just let the event trigger a re-render if we use local state
+                // Actually useAuthStore user is from Supabase, so we might need to update it manually 
+                // for the session or just rely on a local state for the name/avatar display if we want to be clean.
+                // For now, let's keep it simple.
+            }
+        };
+
+        eventEmitter.on('profileUpdated', handleProfileUpdate);
+        return () => eventEmitter.off('profileUpdated', handleProfileUpdate);
+    }, [user]);
+
+    const username = user?.user_metadata?.username || user?.username || 'devteam';
+    const name = user?.user_metadata?.name || user?.name || 'User';
+    const avatar = user?.user_metadata?.avatar || user?.avatar;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -32,11 +50,18 @@ export const MobileSidebar = ({ onClose }: MobileSidebarProps) => {
                 <SidebarItem label="Messages" icon="mail" href="/messages" />
                 <SidebarItem label="Shop" icon="cart" href="/shop" />
                 <SidebarItem label="Bookmarks" icon="bookmark" href="/bookmarks" />
-                <TouchableOpacity style={styles.userContainer} onPress={() => router.push(`/(profile)/${username}`)}>
-                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.surface }]}>
-                        <Ionicons name="person" size={20} color={theme.textTertiary} />
+                <TouchableOpacity style={styles.userContainer} onPress={() => { onClose(); router.push(`/(profile)/${username}`); }}>
+                    {avatar ? (
+                        <Image source={{ uri: avatar }} style={styles.avatar} />
+                    ) : (
+                        <View style={[styles.avatarPlaceholder, { backgroundColor: theme.surface }]}>
+                            <Ionicons name="person" size={20} color={theme.textTertiary} />
+                        </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.name, { color: theme.textPrimary }]} numberOfLines={1}>{name}</Text>
+                        <Text style={[styles.usernameHandle, { color: theme.textTertiary }]} numberOfLines={1}>@{username}</Text>
                     </View>
-                    <Text style={[styles.username, { color: theme.textPrimary }]}>{username}</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -81,8 +106,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 15,
     },
-    username: {
+    avatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 15,
+    },
+    name: {
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    usernameHandle: {
+        fontSize: 14,
     },
 });

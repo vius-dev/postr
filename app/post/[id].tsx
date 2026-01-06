@@ -19,11 +19,13 @@ interface CommentWithDepth extends Comment {
 type ListItem = (Post & { itemType: 'focal' | 'parent' }) | (CommentWithDepth & { itemType: 'reply' });
 
 const PostDetailScreen = () => {
-  const { id } = useLocalSearchParams();
+  const { id, highlightId } = useLocalSearchParams();
   const router = useRouter();
   const { theme } = useTheme();
   const [listData, setListData] = useState<ListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const flatListRef = React.useRef<FlatList>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id && typeof id === 'string') {
@@ -32,19 +34,34 @@ const PostDetailScreen = () => {
         if (res) {
           const parents = res.parents.map((p: Post) => ({ ...p, itemType: 'parent' as const }));
           const focalPost: ListItem = { ...res.post, itemType: 'focal' };
-
-          // Replies are now potentially nested in post.comments if populated by API
-          // For now, api.getPostWithLineage returns post.comments
           const replies = ((res.post as any).comments || []).map((comment: Comment) => ({
             ...comment,
             depth: 0,
             itemType: 'reply' as const,
           }));
-          setListData([...parents, focalPost, ...replies]);
+          const newData = [...parents, focalPost, ...replies];
+          setListData(newData);
+
+          // Handle highlighting
+          if (highlightId && typeof highlightId === 'string') {
+            setHighlightedId(highlightId);
+            const index = newData.findIndex(item => item.id === highlightId);
+            if (index !== -1) {
+              setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+              }, 500);
+
+              // Fade out highlight after 3 seconds
+              setTimeout(() => {
+                setHighlightedId(null);
+              }, 3000);
+            }
+          }
         }
         setIsLoading(false);
       });
     }
+    // ... handles ...
 
     const handlePostDeleted = (deletedPostId: string) => {
       if (deletedPostId === id) {
@@ -98,17 +115,20 @@ const PostDetailScreen = () => {
   }, [id, router]);
 
   const renderItem = ({ item }: { item: ListItem }) => {
+    const isHighlighted = highlightedId === item.id;
+    const highlightStyle = isHighlighted ? { backgroundColor: theme.primary + '20' } : {}; // 20 is opacity in hex
+
     switch (item.itemType) {
       case 'parent':
         return (
-          <View>
+          <View style={highlightStyle}>
             <PostCard post={item} />
             <View style={[styles.threadLine, { backgroundColor: theme.border }]} />
           </View>
         );
       case 'focal':
         return (
-          <View style={{ backgroundColor: theme.card }}>
+          <View style={[{ backgroundColor: theme.card }, highlightStyle]}>
             <PostCard post={item} isFocal />
             {item.poll && <PollResultsChart poll={item.poll} />}
           </View>
@@ -116,7 +136,7 @@ const PostDetailScreen = () => {
       case 'reply':
         const isFirstReply = listData.findIndex(i => i.itemType === 'reply') === listData.indexOf(item);
         return (
-          <View>
+          <View style={highlightStyle}>
             {isFirstReply && (
               <View style={[styles.repliesHeader, { borderBottomColor: theme.borderLight }]}>
                 <Text style={[styles.repliesHeaderText, { color: theme.textSecondary }]}>Replies</Text>
@@ -150,6 +170,7 @@ const PostDetailScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <DetailHeader title="Post" />
       <FlatList
+        ref={flatListRef}
         data={listData}
         renderItem={renderItem}
         keyExtractor={item => `${item.itemType}-${item.id}`}

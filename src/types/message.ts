@@ -29,5 +29,7 @@ export interface Conversation {
     pinnedMessageId?: string;
     isLowQuality?: boolean;
     isMuted?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
 }
 

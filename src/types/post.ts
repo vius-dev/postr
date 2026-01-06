@@ -42,6 +42,7 @@ export type Comment = {
   comments?: Comment[];
   parentPostId?: string;
   repostedPostId?: string;
+  replyToUsername?: string;
 };
 
 export type Post = {
@@ -88,6 +89,7 @@ export type Post = {
   parentPostId?: string;
   quotedPostId?: string;
   repostedPostId?: string;
+  replyToUsername?: string;
 
   // Legacy/UI specific (to be cleaned up if needed)
   repostedBy?: Author;

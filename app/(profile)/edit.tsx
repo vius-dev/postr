@@ -149,6 +149,15 @@ const EditProfileScreen = () => {
         avatar: avatarUrl || undefined,
         headerImage: headerUrl || undefined,
       });
+
+      // Emit event for global sync (Sidebar, Header, etc.)
+      const { eventEmitter } = await import('@/lib/EventEmitter');
+      eventEmitter.emit('profileUpdated', {
+        userId: user.id,
+        name: name.trim(),
+        avatar: avatarUrl,
+      });
+
       Alert.alert('Success', 'Profile updated successfully.', [
         { text: 'OK', onPress: () => router.back() },
       ]);

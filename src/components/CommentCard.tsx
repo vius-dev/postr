@@ -8,6 +8,8 @@ import { useRouter } from 'expo-router';
 import { timeAgo } from '@/utils/time';
 import MediaGrid from './MediaGrid';
 import { useRealtime } from '@/realtime/RealtimeContext';
+import ParsedText from 'react-native-parsed-text';
+import { Linking } from 'react-native';
 
 const INDENT_UNIT = 16;
 const MAX_INDENT_LEVEL = 4;
@@ -77,6 +79,19 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
     router.push(`/(profile)/${initialComment.author.username}`);
   };
 
+  const handleMentionPress = (mention: string) => {
+    router.push(`/(profile)/${mention.substring(1)}`);
+  };
+
+  const handleHashtagPress = (hashtag: string) => {
+    router.push(`/explore?q=${encodeURIComponent(hashtag)}`);
+  };
+
+  const handleUrlPress = (url: string) => {
+    const sanitizedUrl = url.startsWith('http') ? url : `https://${url}`;
+    Linking.openURL(sanitizedUrl).catch(err => console.error("Failed to open URL:", err));
+  };
+
 
   const clampedIndentation = Math.min(indentationLevel, MAX_INDENT_LEVEL);
   const basePadding = 15;
@@ -106,8 +121,24 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
             <Text style={[styles.timestamp, { color: theme.textTertiary }]}>· {timeAgo(initialComment.createdAt)}</Text>
           </View>
         ) : null}
+        {initialComment.replyToUsername && indentationLevel === 0 && (
+          <View style={styles.replyingTo}>
+            <Text style={[styles.replyingToText, { color: theme.textTertiary }]}>
+              Replying to <Text style={{ color: theme.link }}>@{initialComment.replyToUsername}</Text>
+            </Text>
+          </View>
+        )}
         <TouchableOpacity onPress={goToPost} activeOpacity={0.9}>
-          <Text style={[styles.content, { color: theme.textPrimary }]}>{initialComment.content}</Text>
+          <ParsedText
+            style={[styles.content, { color: theme.textPrimary }]}
+            parse={[
+              { pattern: /@(\w+)/, style: [styles.mention, { color: theme.link }], onPress: handleMentionPress },
+              { pattern: /#(\w+)/, style: [styles.hashtag, { color: theme.link }], onPress: handleHashtagPress },
+              { type: 'url', style: [styles.url, { color: theme.link }], onPress: handleUrlPress },
+            ]}
+          >
+            {initialComment.content}
+          </ParsedText>
         </TouchableOpacity>
         {initialComment.media && initialComment.media.length > 0 && (
           <MediaGrid media={initialComment.media} onPress={goToPost} />
@@ -191,6 +222,22 @@ const styles = StyleSheet.create({
   viewRepliesText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  replyingTo: {
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  replyingToText: {
+    fontSize: 13,
+  },
+  mention: {
+    fontWeight: 'bold',
+  },
+  hashtag: {
+    fontWeight: 'normal',
+  },
+  url: {
+    textDecorationLine: 'underline',
   },
 });
 

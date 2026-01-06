@@ -37,6 +37,10 @@ const POST_SELECT = `
     author:profiles!owner_id(*),
     media:post_media(*),
     reaction_counts:reaction_aggregates!subject_id(*)
+  ),
+  parent_post:posts!parent_id(
+    id,
+    author:profiles!owner_id(id, username, name)
   )
 `;
 // Note: We handle deleted_at filtering in the mapping function or query builder because Supabase embedding filters
@@ -921,27 +925,43 @@ export const api = {
 
   // MESSAGING
   // -------------------------------------------------------------------------
-  getConversations: async (): Promise<Conversation[]> => {
+  getConversations: async (params: { limit?: number; cursor?: string } = {}): Promise<{ conversations: Conversation[]; nextCursor?: string; hasMore: boolean }> => {
     const user = await getAuthenticatedUser();
+    const limit = params.limit || 20;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('conversations')
       .select(`
-        *,
-        participants:conversation_participants(user:profiles!conversation_participants_user_id_fkey(*), last_read_at),
-        unread:unread_conversations(unread_count)
-      `)
+      *,
+      participants:conversation_participants(user:profiles!conversation_participants_user_id_fkey(*), last_read_at),
+      unread:unread_conversations(unread_count)
+    `)
       .eq('unread.user_id', user.id)
-      .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false })
+      .limit(limit);
 
+    if (params.cursor) {
+      query = query.lt('updated_at', params.cursor);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
 
-    return data.map((c: any) => ({
+    const conversations = data.map((c: any) => ({
       ...c,
       pinnedMessageId: c.pinned_message_id,
       participants: (c.participants || []).map((p: any) => p.user),
-      unreadCount: c.unread?.[0]?.unread_count || 0
+      unreadCount: c.unread?.[0]?.unread_count || 0,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at
     })) as unknown as Conversation[];
+
+    const hasMore = conversations.length === limit;
+    return {
+      conversations,
+      nextCursor: hasMore && conversations.length > 0 ? (data[data.length - 1].updated_at) : undefined,
+      hasMore
+    };
   },
 
   getConversation: async (conversationId: string): Promise<{ conversation: Conversation; messages: Message[] } | null> => {
@@ -959,7 +979,9 @@ export const api = {
     const transformedConv = {
       ...conv.data,
       pinnedMessageId: (conv.data as any).pinned_message_id,
-      participants: (conv.data as any).participants.map((p: any) => p.user)
+      participants: (conv.data as any).participants.map((p: any) => p.user),
+      createdAt: (conv.data as any).created_at,
+      updatedAt: (conv.data as any).updated_at
     };
 
     return { conversation: transformedConv as unknown as Conversation, messages: msgs };
@@ -1597,21 +1619,28 @@ export const api = {
 
   // NOTIFICATIONS
   // -------------------------------------------------------------------------
-  getNotifications: async (): Promise<Notification[]> => {
+  getNotifications: async (params: { limit?: number; cursor?: string } = {}): Promise<{ notifications: Notification[]; nextCursor?: string; hasMore: boolean }> => {
     const user = await getAuthenticatedUser();
+    const limit = params.limit || DEFAULT_PAGE_SIZE;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('notifications')
       .select(`
-        *,
-        actor:profiles!actor_id(*)
-      `)
+      *,
+      actor:profiles!actor_id(*)
+    `)
       .eq('recipient_id', user.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
+    if (params.cursor) {
+      query = query.lt('created_at', params.cursor);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
 
-    return data.map((n: any) => ({
+    const notifications = data.map((n: any) => ({
       id: n.id,
       type: n.type === 'LIKE' ? 'REACTION' : n.type,
       actor: n.actor,
@@ -1621,6 +1650,13 @@ export const api = {
       postId: n.data?.post_id,
       postSnippet: n.data?.post_snippet
     })) as unknown as Notification[];
+
+    const hasMore = notifications.length === limit;
+    return {
+      notifications,
+      nextCursor: hasMore && notifications.length > 0 ? data[data.length - 1].created_at : undefined,
+      hasMore
+    };
   },
 
   getNotificationSettings: async (): Promise<NotificationSettings> => {
