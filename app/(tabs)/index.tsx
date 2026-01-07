@@ -12,6 +12,7 @@ import { getDb } from '@/lib/db/sqlite';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
 import { api } from '@/lib/api';
 import { PostPipeline } from '@/domain/post/post.pipeline';
+import { usePostNavigation } from '@/hooks/usePostNavigation';
 
 // Manual mapping functions removed in favor of domain pipeline
 
@@ -21,6 +22,7 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { theme } = useTheme();
+  const postNavigation = usePostNavigation();
 
   const loadPosts = useCallback(async () => {
     try {
@@ -140,6 +142,7 @@ export default function FeedScreen() {
           emptyTitle="What's happening?"
           emptyDescription="When you follow people, their posts will show up here. For now, check out the Explore tab!"
           emptyIcon="planet-outline"
+          {...postNavigation}
         />
       )}
       <FAB />

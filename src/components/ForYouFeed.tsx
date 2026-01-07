@@ -8,11 +8,14 @@ import { useTheme } from '@/theme/theme';
 import { eventEmitter } from '@/lib/EventEmitter';
 import { WhoToFollow } from './discovery/WhoToFollow';
 
-interface ForYouFeedProps {
+
+import { PostInteractionHandlers } from './PostCard';
+
+interface ForYouFeedProps extends PostInteractionHandlers {
   header?: React.ReactElement;
 }
 
-const ForYouFeed = ({ header }: ForYouFeedProps) => {
+const ForYouFeed = ({ header, onPressPost, onPressUser, onPressCompose, onPressQuote, onPressHashtag, onPressLink }: ForYouFeedProps) => {
   const { theme } = useTheme();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +74,17 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
   return (
     <FlatList
       data={posts}
-      renderItem={({ item }) => <PostCard post={item} />}
+      renderItem={({ item }) => (
+        <PostCard
+          post={item}
+          onPressPost={onPressPost}
+          onPressUser={onPressUser}
+          onPressCompose={onPressCompose}
+          onPressQuote={onPressQuote}
+          onPressHashtag={onPressHashtag}
+          onPressLink={onPressLink}
+        />
+      )}
       keyExtractor={(item, index) => `${item.id}-${index}`}
       onEndReached={loadMorePosts}
       onEndReachedThreshold={0.5}
@@ -100,6 +113,7 @@ const ForYouFeed = ({ header }: ForYouFeedProps) => {
     />
   );
 };
+
 
 const styles = StyleSheet.create({
   centered: {

@@ -400,6 +400,12 @@ export const SyncEngine = {
                 console.log('[SyncEngine] enqueuePost: Inserting into feed_items');
                 await db.runAsync(`INSERT OR IGNORE INTO feed_items (feed_type, user_id, post_id, rank_score, inserted_at) VALUES (?, ?, ?, ?, ?)`, ['home', user.id, localId, now, now]);
                 console.log('[SyncEngine] enqueuePost: Feed item inserted');
+
+                // If this is a reply, increment the parent post's reply_count
+                if (parentId) {
+                    console.log('[SyncEngine] enqueuePost: Incrementing parent reply_count for', parentId);
+                    await db.runAsync('UPDATE posts SET reply_count = reply_count + 1 WHERE id = ?', [parentId]);
+                }
             });
         } catch (error) {
             console.error('[SyncEngine] enqueuePost FK/DB Failure:', error);
@@ -408,6 +414,12 @@ export const SyncEngine = {
         }
 
         eventEmitter.emit('feedUpdated');
+
+        // If this was a reply, update the parent post's engagement in real-time
+        if (parentId) {
+            await SyncEngine.emitEngagementUpdate(parentId);
+        }
+
         return localId;
     },
 

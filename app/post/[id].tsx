@@ -18,6 +18,9 @@ interface CommentWithDepth extends Comment {
 
 type ListItem = (Post & { itemType: 'focal' | 'parent' }) | (CommentWithDepth & { itemType: 'reply' });
 
+
+import { usePostNavigation } from '@/hooks/usePostNavigation';
+
 const PostDetailScreen = () => {
   const { id, highlightId } = useLocalSearchParams();
   const router = useRouter();
@@ -26,6 +29,7 @@ const PostDetailScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const flatListRef = React.useRef<FlatList>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const postNavigation = usePostNavigation();
 
   useEffect(() => {
     if (id && typeof id === 'string') {
@@ -122,14 +126,14 @@ const PostDetailScreen = () => {
       case 'parent':
         return (
           <View style={highlightStyle}>
-            <PostCard post={item} />
+            <PostCard post={item} {...postNavigation} />
             <View style={[styles.threadLine, { backgroundColor: theme.border }]} />
           </View>
         );
       case 'focal':
         return (
           <View style={[{ backgroundColor: theme.card }, highlightStyle]}>
-            <PostCard post={item} isFocal />
+            <PostCard post={item} isFocal {...postNavigation} />
             {item.poll && <PollResultsChart poll={item.poll} />}
           </View>
         );
@@ -142,13 +146,14 @@ const PostDetailScreen = () => {
                 <Text style={[styles.repliesHeaderText, { color: theme.textSecondary }]}>Replies</Text>
               </View>
             )}
-            <CommentCard comment={item} indentationLevel={item.depth} />
+            <CommentCard comment={item} indentationLevel={item.depth} {...postNavigation} />
           </View>
         );
       default:
         return null;
     }
   };
+
 
   if (isLoading) {
     return (

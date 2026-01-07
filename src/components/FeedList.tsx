@@ -27,7 +27,13 @@ export default function FeedList({
   emptyIcon = 'newspaper-outline',
   emptyActionLabel,
   onEmptyAction,
-}: FeedListProps) {
+  onPressPost,
+  onPressUser,
+  onPressCompose,
+  onPressQuote,
+  onPressHashtag,
+  onPressLink
+}: FeedListProps & PostInteractionHandlers) {
   const renderFooter = () => {
     if (!refreshing) return null;
     return <ActivityIndicator style={{ marginVertical: 20 }} />;
@@ -36,7 +42,17 @@ export default function FeedList({
   return (
     <FlatList
       data={posts}
-      renderItem={({ item }) => <PostCard post={item} />}
+      renderItem={({ item }) => (
+        <PostCard
+          post={item}
+          onPressPost={onPressPost}
+          onPressUser={onPressUser}
+          onPressCompose={onPressCompose}
+          onPressQuote={onPressQuote}
+          onPressHashtag={onPressHashtag}
+          onPressLink={onPressLink}
+        />
+      )}
       keyExtractor={(item) => item.id}
       onEndReached={onLoadMore}
       onEndReachedThreshold={0.5}
@@ -58,4 +74,7 @@ export default function FeedList({
     />
   );
 }
+
+import { PostInteractionHandlers } from './PostCard';
+
 

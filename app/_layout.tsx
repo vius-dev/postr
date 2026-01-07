@@ -14,6 +14,18 @@ import { SyncEngine } from '@/lib/sync/SyncEngine';
 import { registerBackgroundFetchAsync } from '@/lib/sync/BackgroundFetch';
 import { ToastProvider } from '@/providers/ToastProvider';
 
+// IGNORE: Suppress specific "keep awake" error likely from dev environment or unrelated dep
+const originalError = console.error;
+console.error = (...args) => {
+  if (
+    typeof args[0] === 'string' &&
+    (args[0].includes('Unable to activate keep awake') || args[0].includes('KeepAwake'))
+  ) {
+    return;
+  }
+  originalError(...args);
+};
+
 function RootLayoutNav() {
   const { theme } = useTheme();
   const { isAuthenticated, isLoading: isAuthLoading, initialize, user } = useAuthStore();

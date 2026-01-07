@@ -177,9 +177,12 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
         .in('post_id', targetIds),
       supabase
         .from('poll_votes')
-        .select('post_id, choice_index')
+        .select(`
+          poll_id,
+          option:poll_options!option_id(order_index)
+        `)
         .eq('user_id', user.id)
-        .in('post_id', targetIds),
+        .in('poll_id', targetIds),
       supabase
         .from('posts')
         .select('reposted_post_id')
@@ -229,7 +232,16 @@ const hydratePosts = async (posts: Post[]): Promise<Post[]> => {
     const serverRepostSet = new Set((reposts as any).data?.map((r: any) => r.reposted_post_id) || []);
 
     // Server votes (assumed to be reflected in the post's poll_json counts already if synced)
-    const serverVoteMap = new Map(pollVotes.data?.map((v: any) => [v.post_id, v.choice_index]) || []);
+    // Fix: Map server schema (poll_id, option.order_index) to app schema (post_id, choice_index)
+    const serverVoteMap = new Map();
+    if (pollVotes.data) {
+      pollVotes.data.forEach((v: any) => {
+        const idx = v.option?.order_index;
+        if (idx !== undefined) {
+          serverVoteMap.set(v.poll_id, idx);
+        }
+      });
+    }
 
     // Local votes (pending, might not be in server counts)
     const localVoteMap = new Map();
@@ -734,6 +746,33 @@ export const api = {
     return hydrated[0] || null;
   },
 
+  getPostReplies: async (postId: string): Promise<Comment[]> => {
+    const user = await api.getCurrentUser();
+    const userId = user?.id || null;
+    try {
+      const db = await getDb();
+      const rows: any[] = await db.getAllAsync(`
+             SELECT
+                p.*,
+                u.username, u.display_name, u.avatar_url, u.verified as is_verified,
+                r.reaction_type as my_reaction,
+                CASE WHEN b.post_id IS NOT NULL THEN 1 ELSE 0 END as is_bookmarked
+            FROM posts p
+            LEFT JOIN users u ON p.owner_id = u.id
+            LEFT JOIN reactions r ON p.id = r.post_id AND r.user_id = ?
+            LEFT JOIN bookmarks b ON p.id = b.post_id AND b.user_id = ?
+            WHERE p.parent_id = ? AND p.deleted = 0
+            ORDER BY p.created_at ASC
+        `, [userId, userId, postId]);
+
+      const ctx = { viewerId: userId, now: new Date().toISOString() };
+      return rows.map(row => PostPipeline.map(PostPipeline.adapt(row), ctx) as unknown as Comment);
+    } catch (e) {
+      console.warn('Local getPostReplies failed', e);
+      return [];
+    }
+  },
+
   getPostWithLineage: async (postId: string): Promise<{ post: Post; parents: Post[] } | null> => {
     // Attempt optimizing with RPC if available, fallback to recursive fetch
     try {
@@ -741,10 +780,15 @@ export const api = {
       if (!error && data && data.length > 0) {
         const userLineage = await api.getCurrentUser();
         const userId = userLineage?.id || null;
-        const posts = await hydratePosts(data.map((row: any) => mapPost(row, userId)));
+        const posts = await hydratePosts(data.map((row: any) => mapPost(row, userId))); // Helper mapPost available in file
         const post = posts.find(p => p.id === postId);
         const parents = posts.filter(p => p.id !== postId).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        return post ? { post, parents } : null;
+
+        if (post) {
+          // Hydrate comments
+          (post as any).comments = await api.getPostReplies(postId);
+          return { post, parents };
+        }
       }
     } catch (e) {
       console.warn('RPC get_post_lineage failed, falling back to manual recursion');
@@ -768,6 +812,9 @@ export const api = {
       }
       depth++;
     }
+
+    // Hydrate comments
+    (post as any).comments = await api.getPostReplies(postId);
 
     return { post, parents };
   },
@@ -1564,17 +1611,121 @@ export const api = {
   votePoll: async (postId: string, choiceIndex: number): Promise<Post> => {
     const user = await getAuthenticatedUser();
 
-    const { error } = await supabase.rpc('vote_on_poll', {
-      p_post_id: postId,
-      p_user_id: user.id,
-      p_choice_index: choiceIndex
-    });
+    // 1. Resolve choiceIndex to option_id from relational table
+    // The server uses a relational schema (polls, poll_options, poll_votes) that we must align with.
+    const { data: option, error: optionError } = await supabase
+      .from('poll_options')
+      .select('id')
+      .eq('poll_id', postId)
+      .eq('order_index', choiceIndex)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (optionError) {
+      console.error('Error fetching poll option:', optionError);
+      throw optionError;
+    }
+
+    if (!option) {
+      console.error(`Poll option not found for post ${postId} index ${choiceIndex}`);
+      // Fallback: This might happen if the trigger failed to create options.
+      // We cannot vote purely relationally if options are missing.
+      throw new Error('Poll option not found on server');
+    }
+
+    // 2. Record the vote in the server's poll_votes table
+    const { error: voteError } = await supabase
+      .from('poll_votes')
+      .upsert({
+        poll_id: postId,
+        user_id: user.id,
+        option_id: option.id
+      }, { onConflict: 'poll_id,user_id' });
+
+    if (voteError) throw voteError;
+
+    // 2. Manually update the post's poll_json counts (since we lack a reliable server-side RPC)
+    // Note: This has a race condition window, but acceptable for MVP without custom backend functions.
+    const { data: post, error: fetchError } = await supabase
+      .from('posts')
+      .select('poll_json')
+      .eq('id', postId)
+      .single();
+
+    if (fetchError || !post) throw fetchError || new Error('Post not found');
+
+    if (post.poll_json) {
+      const poll = typeof post.poll_json === 'string' ? JSON.parse(post.poll_json) : post.poll_json;
+
+      // Recalculate counts based on this new vote
+      // Ideally we'd recount from the poll_votes table for accuracy:
+      // Recalculate counts properly using relational tables
+      // We explicitly query by poll_id (not post_id) and link option_id back to index
+      const { data: allVotes } = await supabase
+        .from('poll_votes')
+        .select('option_id')
+        .eq('poll_id', postId);
+
+      if (allVotes) {
+        // We need to map option_id back to order_index to update the JSON
+        const { data: allOptions } = await supabase
+          .from('poll_options')
+          .select('id, order_index')
+          .eq('poll_id', postId);
+
+        if (allOptions) {
+          const optionIndexMap = new Map();
+          allOptions.forEach((o: any) => optionIndexMap.set(o.id, o.order_index));
+
+          const choices = poll.choices.map((c: any) => ({ ...c, vote_count: 0 }));
+          let totalVotes = 0;
+
+          allVotes.forEach((v: any) => {
+            const idx = optionIndexMap.get(v.option_id);
+            if (idx !== undefined && choices[idx]) {
+              choices[idx].vote_count++;
+              totalVotes++;
+            }
+          });
+
+          poll.choices = choices;
+          poll.totalVotes = totalVotes;
+
+          // Write back with updated timestamp to trigger global sync
+          await supabase
+            .from('posts')
+            .update({
+              poll_json: poll,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', postId);
+        }
+      }
+    }
 
     const updatedPost = await api.getPost(postId);
     if (!updatedPost) throw new Error('Failed to fetch updated post');
     return updatedPost;
+  },
+
+  getMyVotes: async (): Promise<{ post_id: string; choice_index: number }[]> => {
+    const user = await getAuthenticatedUser();
+
+    // Fetch my votes and join with options to get the index
+    // Note: poll_votes.poll_id corresponds to our local post_id
+    const { data, error } = await supabase
+      .from('poll_votes')
+      .select(`
+        poll_id,
+        option:poll_options!option_id(order_index)
+      `)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    return data.map((v: any) => ({
+      post_id: v.poll_id,
+      choice_index: v.option?.order_index ?? -1
+    })).filter((v: any) => v.choice_index !== -1);
   },
 
   createPoll: async (pollData: { question: string; choices: any[]; durationSeconds: number; id?: string }): Promise<Post> => {

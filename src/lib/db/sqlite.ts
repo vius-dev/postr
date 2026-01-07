@@ -578,6 +578,7 @@ export const bindUserDatabase = async (userId: string) => {
         // 2. Shared device scenarios
         // 3. Artifact cleanup
 
+        // 1. Clean up User-Specific Tables (Outgoing User Data)
         await db.runAsync('DELETE FROM feed_items WHERE user_id != ?', [userId]);
         await db.runAsync('DELETE FROM reactions WHERE user_id != ?', [userId]);
         await db.runAsync('DELETE FROM bookmarks WHERE user_id != ?', [userId]);
@@ -585,9 +586,26 @@ export const bindUserDatabase = async (userId: string) => {
         await db.runAsync('DELETE FROM drafts WHERE owner_id != ?', [userId]);
         await db.runAsync('DELETE FROM sync_state WHERE user_id != ?', [userId]);
 
-        // STRICT PURGE: Remove posts not belonging to this user or orphaned
+        // [FIX] Also clean up poll_votes for outgoing users
+        await db.runAsync('DELETE FROM poll_votes WHERE user_id != ?', [userId]);
+
+        // 2. Pre-emptive FK Cleanup: Remove references to posts we are about to delete
+        // WARN: Even if a reaction/bookmark/vote belongs to the *current* user, 
+        // if it points to a post owned by the *old* user (which we are about to nuke),
+        // it MUST be deleted first, otherwise the FK constraint on 'posts' will fail.
+
+        const zombiePostIdsSelector = `SELECT id FROM posts WHERE owner_id != '${userId}'`;
+
+        await db.runAsync(`DELETE FROM feed_items WHERE post_id IN (${zombiePostIdsSelector})`);
+        await db.runAsync(`DELETE FROM reactions WHERE post_id IN (${zombiePostIdsSelector})`);
+        await db.runAsync(`DELETE FROM bookmarks WHERE post_id IN (${zombiePostIdsSelector})`);
+        await db.runAsync(`DELETE FROM poll_votes WHERE post_id IN (${zombiePostIdsSelector})`);
+
+        // 3. STRICT PURGE: Remove posts not belonging to this user
         // This prevents "zombie" posts from causing FK failures during writes.
         await db.runAsync('DELETE FROM posts WHERE owner_id != ?', [userId]);
+
+        // 4. Final Safety Net: Remove orphaned posts (no owner in users table)
         await db.runAsync('DELETE FROM posts WHERE owner_id NOT IN (SELECT id FROM users)');
     });
 };

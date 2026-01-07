@@ -268,60 +268,60 @@ export const FeedDeltaPhase: SyncPhase = {
 export const PollVotesPhase: SyncPhase = {
     name: 'poll_votes',
 
-    async run({ db }) {
+    async run({ db, userId }) {
+        // 1. OUTBOUND SYNC: Push pending votes to server
         const pendingVotes: any[] = await db.getAllAsync(
             'SELECT * FROM poll_votes WHERE sync_status = "pending" ORDER BY created_at ASC'
         );
 
-        if (pendingVotes.length === 0) return;
+        if (pendingVotes.length > 0) {
+            console.log(`[SyncPhases] PollVotesPhase: Found ${pendingVotes.length} pending votes`);
 
-        console.log(`[SyncPhases] PollVotesPhase: Found ${pendingVotes.length} pending votes`);
-
-        for (const vote of pendingVotes) {
-            try {
-                // Check if post actually exists on server first?
-                // api.votePoll will fail if post doesn't exist.
-                // Assuming post is synced by now.
-
-                const updated = await api.votePoll(vote.post_id, vote.choice_index);
-
-                await db.withTransactionAsync(async () => {
-                    // Update the local post with authoritative server data (including potential total count fixes)
-                    await upsertPost(db, updated);
-
-                    await db.runAsync(
-                        'UPDATE poll_votes SET sync_status = "synced" WHERE post_id = ? AND user_id = ?',
-                        [vote.post_id, vote.user_id]
-                    );
-                });
-            } catch (error: any) {
-                // Handle duplicate key error (already voted on server)
-                // Postgres error code 23505 is unique_violation
-                // Supabase might wrap this, so check for code '23505' or 'PGRST116' etc.
-                if (error?.code === '23505' || String(error?.details).includes('already exists')) {
-                    console.log(`[SyncPhases] Vote already exists on server for ${vote.post_id}. Marking as synced.`);
+            for (const vote of pendingVotes) {
+                try {
+                    const updated = await api.votePoll(vote.post_id, vote.choice_index);
 
                     await db.withTransactionAsync(async () => {
-                        // Fetch latest post state to ensure consistency
-                        try {
-                            const latest = await api.getPost(vote.post_id);
-                            if (latest) {
-                                await upsertPost(db, latest);
-                            }
-                        } catch (e) {
-                            console.warn('Failed to fetch latest post after duplicate vote fix', e);
-                        }
-
+                        await upsertPost(db, updated);
                         await db.runAsync(
                             'UPDATE poll_votes SET sync_status = "synced" WHERE post_id = ? AND user_id = ?',
                             [vote.post_id, vote.user_id]
                         );
                     });
-                    continue;
+                } catch (error: any) {
+                    // Check for duplicate key error (already voted on server)
+                    if (error?.code === '23505' || String(error?.details || error?.message).includes('already exists')) {
+                        console.log(`[SyncPhases] Vote already exists on server for ${vote.post_id}. Marking as synced.`);
+                        await db.runAsync(
+                            'UPDATE poll_votes SET sync_status = "synced" WHERE post_id = ? AND user_id = ?',
+                            [vote.post_id, vote.user_id]
+                        );
+                        continue;
+                    }
+                    console.error(`[SyncPhases] PollVotesPhase: Failed to sync vote for post ${vote.post_id}`, error);
                 }
-
-                console.error(`[SyncPhases] PollVotesPhase: Failed to sync vote for post ${vote.post_id}`, error);
             }
+        }
+
+        // 2. INBOUND SYNC: Fetch my votes from server to ensure local state is correct
+        try {
+            const myVotes = await api.getMyVotes();
+            if (myVotes && myVotes.length > 0) {
+                await db.withTransactionAsync(async () => {
+                    for (const v of myVotes) {
+                        // Use userId from the sync context, or the one from the vote if available (though api.getMyVotes implicit uses auth user)
+                        // We strictly use the authenticated userId for the local DB to avoid confusion.
+                        await db.runAsync(
+                            `INSERT OR REPLACE INTO poll_votes (post_id, user_id, choice_index, sync_status) 
+                             VALUES (?, ?, ?, 'synced')`,
+                            [v.post_id, userId, v.choice_index]
+                        );
+                    }
+                });
+                console.log(`[SyncPhases] PollVotesPhase: Downloaded ${myVotes.length} votes from server`);
+            }
+        } catch (e) {
+            console.error('[SyncPhases] PollVotesPhase: Failed to download remote votes', e);
         }
     }
 };
@@ -337,16 +337,16 @@ export const DiagnosticPhase: SyncPhase = {
 
         for (const table of tables) {
             try {
-                const res = await db.getFirstAsync(`SELECT COUNT(*) as count FROM ${table}`) as any;
+                const res = await db.getFirstAsync(`SELECT COUNT(*) as count FROM ${table} `) as any;
                 stats[table] = res?.count || 0;
             } catch (e) {
-                stats[table] = `Error: ${e instanceof Error ? e.message : String(e)}`;
+                stats[table] = `Error: ${e instanceof Error ? e.message : String(e)} `;
             }
         }
 
-        const userInDb = await db.getFirstAsync(`SELECT id FROM users WHERE id = ?`, [userId]) as any;
-        const syncState = await db.getAllAsync(`SELECT key, value FROM sync_state WHERE user_id = ?`, [userId]) as any[];
-        const schema = await db.getAllAsync(`SELECT name, sql FROM sqlite_master WHERE type='table'`) as any[];
+        const userInDb = await db.getFirstAsync(`SELECT id FROM users WHERE id = ? `, [userId]) as any;
+        const syncState = await db.getAllAsync(`SELECT key, value FROM sync_state WHERE user_id = ? `, [userId]) as any[];
+        const schema = await db.getAllAsync(`SELECT name, sql FROM sqlite_master WHERE type = 'table'`) as any[];
         const fkIssues = await db.getAllAsync(`PRAGMA foreign_key_check`) as any[];
 
         console.log('[SyncEngine] Diagnostic Report:', {

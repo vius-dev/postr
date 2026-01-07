@@ -14,14 +14,25 @@ import { Linking } from 'react-native';
 const INDENT_UNIT = 16;
 const MAX_INDENT_LEVEL = 4;
 
-interface CommentCardProps {
+
+import { PostInteractionHandlers } from './PostCard';
+
+interface CommentCardProps extends PostInteractionHandlers {
   comment: Comment;
   indentationLevel: number;
 }
 
-const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardProps) => {
+const CommentCard = ({
+  comment: initialComment,
+  indentationLevel,
+  onPressUser,
+  onPressPost,
+  onPressCompose,
+  onPressHashtag,
+  onPressLink
+}: CommentCardProps) => {
   const { theme } = useTheme();
-  const router = useRouter();
+
   const {
     counts,
     userReactions,
@@ -64,7 +75,7 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
   };
 
   const handleCommentPress = () => {
-    router.push({ pathname: '/(compose)/compose', params: { replyToId: initialComment.id, authorUsername: initialComment.author.username } });
+    onPressCompose?.(initialComment as any);
   };
 
   const handleRepost = async () => {
@@ -76,20 +87,20 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
   };
 
   const goToProfile = () => {
-    router.push(`/(profile)/${initialComment.author.username}`);
+    onPressUser?.(initialComment.author.username);
   };
 
   const handleMentionPress = (mention: string) => {
-    router.push(`/(profile)/${mention.substring(1)}`);
+    onPressUser?.(mention.substring(1));
   };
 
   const handleHashtagPress = (hashtag: string) => {
-    router.push(`/explore?q=${encodeURIComponent(hashtag)}`);
+    onPressHashtag?.(hashtag);
   };
 
   const handleUrlPress = (url: string) => {
     const sanitizedUrl = url.startsWith('http') ? url : `https://${url}`;
-    Linking.openURL(sanitizedUrl).catch(err => console.error("Failed to open URL:", err));
+    onPressLink ? onPressLink(sanitizedUrl) : null;
   };
 
 
@@ -100,7 +111,7 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
   };
 
   const goToPost = () => {
-    router.push(`/post/${initialComment.id}`);
+    onPressPost?.(initialComment as any);
   };
 
   return (
@@ -141,7 +152,7 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
           </ParsedText>
         </TouchableOpacity>
         {initialComment.media && initialComment.media.length > 0 && (
-          <MediaGrid media={initialComment.media} onPress={goToPost} />
+          <MediaGrid media={initialComment.media} onPress={(index) => { }} />
         )}
         <ReactionBar
           postId={initialComment.id}
@@ -169,6 +180,7 @@ const CommentCard = ({ comment: initialComment, indentationLevel }: CommentCardP
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

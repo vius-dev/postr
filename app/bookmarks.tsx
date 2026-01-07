@@ -8,12 +8,14 @@ import { Post } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import { useResponsive } from '@/hooks/useResponsive';
 import { Stack } from 'expo-router';
+import { usePostNavigation } from '@/hooks/usePostNavigation';
 
 export default function BookmarksScreen() {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const { theme } = useTheme();
     const { isWeb } = useResponsive();
+    const postNavigation = usePostNavigation();
 
     useEffect(() => {
         const fetchBookmarks = async () => {
@@ -44,6 +46,7 @@ export default function BookmarksScreen() {
                     onRefresh={() => { }} // Not implemented for bookmarks in mock usually
                     onLoadMore={() => { }}
                     refreshing={false}
+                    {...postNavigation}
                 />
             )}
         </Container>

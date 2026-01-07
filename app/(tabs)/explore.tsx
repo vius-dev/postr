@@ -15,10 +15,12 @@ import EmptyState from '@/components/EmptyState';
 import { useExploreSettings } from '@/state/exploreSettings';
 import { eventEmitter } from '@/lib/EventEmitter';
 import { WhoToFollow } from '@/components/discovery/WhoToFollow';
+import { usePostNavigation } from '@/hooks/usePostNavigation';
 
 export default function ExploreScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const postNavigation = usePostNavigation();
   const { showLocationContent, personalizeTrends, explorationLocation } = useExploreSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ posts: Post[], users: User[] }>({ posts: [], users: [] });
@@ -159,14 +161,14 @@ export default function ExploreScreen() {
         {searchTab === 'Latest' && hasPosts && (
           <View style={styles.section}>
             {searchResults.posts.map(post => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} {...postNavigation} />
             ))}
           </View>
         )}
         {searchTab === 'Media' && hasMedia && (
           <View style={styles.section}>
             {mediaPosts.map(post => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} {...postNavigation} />
             ))}
           </View>
         )}
@@ -196,6 +198,7 @@ export default function ExploreScreen() {
         renderSearchResult()
       ) : (
         <ForYouFeed
+          {...postNavigation}
           header={
             <>
               <WhoToFollow />

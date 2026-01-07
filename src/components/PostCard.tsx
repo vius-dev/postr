@@ -1,36 +1,52 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import ReactionBar from '@/components/ReactionBar';
 import RepostModal from '@/components/RepostModal';
 import PollView from '@/components/PollView';
 import QuotedPost from '@/components/QuotedPost';
 import PostMenu from '@/components/PostMenu';
 import ParsedText from 'react-native-parsed-text';
-import { api } from '@/lib/api';
 import { Post, ReactionAction } from '@/types/post';
 import { useTheme } from '@/theme/theme';
 import { useRealtime } from '@/realtime/RealtimeContext';
 import { SyncEngine } from '@/lib/sync/SyncEngine';
-import { Linking } from 'react-native';
-import Card from '@/components/Card'; // Import the new Card component
-import { timeAgo } from '@/utils/time'; // Import a time formatting utility
+import Card from '@/components/Card';
+import { timeAgo } from '@/utils/time';
 import MediaGrid from '@/components/MediaGrid';
 import ImageViewer from '@/components/ImageViewer';
 
 import { isAuthorityActive } from '@/utils/user';
 
-interface PostCardProps {
+export interface PostInteractionHandlers {
+  onPressPost?: (post: Post) => void;
+  onPressUser?: (username: string) => void;
+  onPressCompose?: (replyToPost: Post) => void;
+  onPressQuote?: (quotePost: Post) => void;
+  onPressImage?: (post: Post, index: number) => void;
+  onPressHashtag?: (hashtag: string) => void;
+  onPressLink?: (url: string) => void;
+}
+
+interface PostCardProps extends PostInteractionHandlers {
   post: Post;
   isFocal?: boolean;
   showThreadLine?: boolean;
 }
 
-export default function PostCard({ post, isFocal = false, showThreadLine = false }: PostCardProps) {
-  const router = useRouter();
+export default function PostCard({
+  post,
+  isFocal = false,
+  showThreadLine = false,
+  onPressPost,
+  onPressUser,
+  onPressCompose,
+  onPressQuote,
+  onPressHashtag,
+  onPressLink
+}: PostCardProps) {
   const { theme } = useTheme();
 
   const showAuthority = isAuthorityActive(post.author);
@@ -60,28 +76,20 @@ export default function PostCard({ post, isFocal = false, showThreadLine = false
     });
   }, [post.id, post.stats, post.viewer, initializePost]);
 
-  // For now, we rely on the Post object provided by the feed/API
-  // Realtime updates should ideally update the Post object in state/context
   const reaction = userReactions[post.id] !== undefined ? userReactions[post.id] : post.viewer.reaction;
   const isReposted = userReposts[post.id] !== undefined ? userReposts[post.id] : post.viewer.isReposted;
 
-  // For reposts, the "displayPost" which contains the content, media, etc. is the original
   const displayPost = (post.type === 'repost' && post.repostedPost) ? post.repostedPost : post;
 
-
-
-  // CRITICAL FIX: Recursively resolve repost chains
-  // If we're displaying a repost, and that repost is itself a repost, follow the chain
   let finalDisplayPost = displayPost;
   let depth = 0;
-  const MAX_DEPTH = 5; // Prevent infinite loops
+  const MAX_DEPTH = 5;
 
   while (finalDisplayPost.type === 'repost' && finalDisplayPost.repostedPost && depth < MAX_DEPTH) {
     finalDisplayPost = finalDisplayPost.repostedPost;
     depth++;
   }
 
-  // Use the final resolved post for display
   const resolvedDisplayPost = finalDisplayPost;
 
   const registryCounts = counts[post.id];
@@ -94,7 +102,7 @@ export default function PostCard({ post, isFocal = false, showThreadLine = false
   };
 
   const handleComment = () => {
-    router.push({ pathname: '/(compose)/compose', params: { replyToId: resolvedDisplayPost.id, authorUsername: resolvedDisplayPost.author.username } });
+    onPressCompose?.(resolvedDisplayPost);
   };
 
   const handleReaction = async (action: ReactionAction) => {
@@ -116,23 +124,25 @@ export default function PostCard({ post, isFocal = false, showThreadLine = false
   };
 
   const handleQuote = () => {
-    router.push({ pathname: '/(compose)/compose', params: { quotePostId: post.id } });
     setRepostModalVisible(false);
+    onPressQuote?.(post);
   };
 
-  const handleMentionPress = (mention: string) => router.push(`/(profile)/${mention.substring(1)}`);
+  const handleMentionPress = (mention: string) => {
+    onPressUser?.(mention.substring(1));
+  };
+
   const handleHashtagPress = (hashtag: string) => {
-    router.push(`/explore?q=${encodeURIComponent(hashtag)}`);
+    onPressHashtag?.(hashtag);
   };
 
   const handleUrlPress = (url: string) => {
-    // Sanitize URL (add https if missing)
     const sanitizedUrl = url.startsWith('http') ? url : `https://${url}`;
-    Linking.openURL(sanitizedUrl).catch(err => console.error("Failed to open URL:", err));
+    onPressLink ? onPressLink(sanitizedUrl) : null;
   };
-  const goToProfile = () => router.push(`/(profile)/${post.author.username}`);
-  const goToPost = () => !isFocal && router.push(`/post/${post.id}`);
 
+  const goToProfile = () => onPressUser?.(post.author.username);
+  const goToPost = () => !isFocal && onPressPost?.(post);
 
   return (
     <Card>
@@ -162,7 +172,7 @@ export default function PostCard({ post, isFocal = false, showThreadLine = false
           <Card.Header>
             <View style={styles.authorContainer}>
               {resolvedDisplayPost.author.username ? (
-                <TouchableOpacity onPress={() => router.push(`/(profile)/${resolvedDisplayPost.author.username}`)} activeOpacity={0.7} style={styles.authorInfo}>
+                <TouchableOpacity onPress={() => onPressUser?.(resolvedDisplayPost.author.username)} activeOpacity={0.7} style={styles.authorInfo}>
                   <Text style={[styles.authorName, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{resolvedDisplayPost.author.name}</Text>
                   {isAuthorityActive(resolvedDisplayPost.author) && (
                     <Image source={{ uri: resolvedDisplayPost.author.official_logo }} style={styles.officialLogo} contentFit="contain" />
@@ -197,7 +207,7 @@ export default function PostCard({ post, isFocal = false, showThreadLine = false
           </Card.Header>
 
           <Card.Content>
-            <TouchableOpacity onPress={() => !isFocal && router.push(`/post/${resolvedDisplayPost.id}`)} disabled={isFocal} activeOpacity={0.9}>
+            <TouchableOpacity onPress={goToPost} disabled={isFocal} activeOpacity={0.9}>
               {resolvedDisplayPost.content ? (
                 <ParsedText
                   style={[styles.content, { color: theme.textPrimary }]}
@@ -324,7 +334,7 @@ const styles = StyleSheet.create({
   authorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1, // Allow taking available space
+    flex: 1,
     marginRight: 10,
   },
   officialLogo: {
@@ -341,16 +351,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
     marginRight: 4,
-    flexShrink: 1, // Shrink first
+    flexShrink: 1,
   },
   authorUsername: {
     fontSize: 15,
     marginRight: 4,
-    flexShrink: 0, // Do not shrink
+    flexShrink: 0,
   },
   timestamp: {
     fontSize: 15,
-    flexShrink: 0, // Do not shrink
+    flexShrink: 0,
   },
   moreButton: {
     padding: 2,
