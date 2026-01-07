@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { showError, showSuccess } from '@/utils/toast';
 import { api } from '@/lib/api';
 import { Conversation } from '@/types/message';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -53,11 +54,11 @@ export default function EditConversationScreen() {
 
     try {
       await api.updateConversation(conversationId, { name, description });
-      Alert.alert('Success', 'Channel details have been updated.');
+      showSuccess('Channel details have been updated!');
       router.back();
     } catch (error) {
       console.error('Error updating conversation:', error);
-      Alert.alert('Error', 'Failed to update channel details.');
+      showError('We couldn\'t update those details right now. Please try again.');
     }
   };
 

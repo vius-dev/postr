@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { showError } from '@/utils/toast';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -27,7 +28,7 @@ export default function LoginScreen() {
       console.log('[LoginScreen] Login successful, waiting for layout redirect...');
     } catch (error: any) {
       console.error('[LoginScreen] Login error:', error);
-      alert(error.message || 'Failed to login');
+      showError(error);
     } finally {
       console.log('[LoginScreen] Login process finished (finally block).');
       setIsLoggingIn(false);

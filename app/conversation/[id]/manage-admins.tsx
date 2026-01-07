@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { showError } from '@/utils/toast';
 import { api } from '@/lib/api';
 import { Conversation } from '@/types/message';
 import { User } from '@/types/user';
@@ -53,7 +54,7 @@ export default function ManageAdminsScreen() {
       loadConversationDetails(conversationId);
     } catch (error) {
       console.error(`Error ${action}ing admin:`, error);
-      Alert.alert('Error', `Failed to ${action} admin.`);
+      showError(`We couldn't ${action} that admin right now. Please try again.`);
     }
   };
 

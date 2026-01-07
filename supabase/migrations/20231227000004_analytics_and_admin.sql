@@ -17,7 +17,10 @@ alter table public.post_views enable row level security;
 
 create policy "Users can record views"
     on public.post_views for insert
-    with check (true); -- Public write, strict rate limit advised in Edge
+    with check (
+        auth.uid() is not null 
+        and (user_id = auth.uid() or user_id is null)
+    );
 
 -- No public read (Analytics are private)
 
@@ -83,4 +86,4 @@ begin
   
   return is_reserved;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;

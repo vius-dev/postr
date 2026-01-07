@@ -9,7 +9,7 @@ begin
   new.updated_at = now();
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- 2. APPLY TRIGGERS TO CORE TABLES
 

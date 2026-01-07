@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { showError } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import MediaGrid from '@/components/MediaGrid';
 import * as ImagePicker from 'expo-image-picker';
@@ -64,7 +65,7 @@ const ComposeScreen = () => {
             // We focus on text edits as per typical platform rules
           }
         } catch (error) {
-          Alert.alert('Error', 'Failed to load post for editing');
+          showError('We couldn\'t load that post. It may have been deleted.');
           router.back();
         }
       };

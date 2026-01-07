@@ -109,7 +109,7 @@ begin
   values (new.id);
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 create trigger on_profile_created_settings
   after insert on public.profiles

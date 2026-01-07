@@ -1791,6 +1791,24 @@ export const api = {
     return data.map(mapProfile).filter(Boolean) as User[];
   },
 
+  checkUsernameAvailability: async (username: string): Promise<boolean> => {
+    if (!username || username.trim().length < 3) return false;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username.trim().toLowerCase())
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      // PGRST116 means "The query returned 0 rows" which is what we want
+      return true;
+    }
+
+    if (error) throw error;
+    return !data; // If data exists, username is taken
+  },
+
   searchPosts: async (query: string): Promise<Post[]> => {
     if (!query || query.trim().length === 0) return [];
 

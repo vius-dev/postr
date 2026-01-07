@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
+import { showError, showSuccess } from '@/utils/toast';
 import { Stack, useRouter } from 'expo-router';
 import { api } from '@/lib/api';
 
@@ -15,22 +16,21 @@ export default function PasswordSettings() {
 
     const handleSave = async () => {
         if (!currentPassword || !newPassword || !confirmPassword) {
-            Alert.alert('Error', 'Please fill in all fields');
+            showError('Please fill in all fields', 'Missing Information');
             return;
         }
         if (newPassword !== confirmPassword) {
-            Alert.alert('Error', 'New passwords do not match');
+            showError('Double check your passwords—they don\'t quite match yet.');
             return;
         }
 
         setIsLoading(true);
         try {
             await api.updatePassword(currentPassword, newPassword);
-            Alert.alert('Success', 'Your password has been updated', [
-                { text: 'OK', onPress: () => router.back() }
-            ]);
+            showSuccess('Your password has been updated successfully!', 'All set');
+            router.back();
         } catch (error) {
-            Alert.alert('Error', 'Failed to update password');
+            showError(error);
         } finally {
             setIsLoading(false);
         }

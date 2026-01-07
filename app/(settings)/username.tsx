@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import debounce from 'lodash/debounce';
 import { useTheme } from '@/theme/theme';
 import { useAuthStore } from '@/state/auth';
 import { api } from '@/lib/api';
@@ -28,7 +29,50 @@ export default function UsernameScreen() {
   const currentUsername = user?.user_metadata?.username ?? '';
   const [username, setUsername] = useState(currentUsername);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkAvailability = debounce(async (val: string) => {
+      if (val.toLowerCase() === currentUsername.toLowerCase()) {
+        setIsAvailable(null);
+        return;
+      }
+      if (val.length < MIN_USERNAME_LENGTH) {
+        setIsAvailable(null);
+        return;
+      }
+      if (!USERNAME_REGEX.test(val)) {
+        setIsAvailable(null);
+        return;
+      }
+
+      setIsCheckingAvailability(true);
+      try {
+        const available = await api.checkUsernameAvailability(val);
+        setIsAvailable(available);
+        if (!available) {
+          setError('This username is already taken.');
+        } else {
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Availability check failed', err);
+      } finally {
+        setIsCheckingAvailability(false);
+      }
+    }, 500);
+
+    if (username !== currentUsername) {
+      checkAvailability(username);
+    } else {
+      setIsAvailable(null);
+      setError(null);
+    }
+
+    return () => checkAvailability.cancel();
+  }, [username, currentUsername]);
 
   useEffect(() => {
     const loadLocalUser = async () => {
@@ -86,6 +130,12 @@ export default function UsernameScreen() {
       return;
     }
 
+    if (isAvailable === false) {
+      setError('This username is already taken.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // 3. Single atomic update (DB enforces uniqueness)
       await api.updateProfile({ username: normalized });
@@ -129,8 +179,10 @@ export default function UsernameScreen() {
 
   const canSave =
     !isLoading &&
-    username.trim().length > 0 &&
-    username.toLowerCase() !== currentUsername.toLowerCase();
+    !isCheckingAvailability &&
+    username.trim().length >= MIN_USERNAME_LENGTH &&
+    username.toLowerCase() !== currentUsername.toLowerCase() &&
+    isAvailable === true;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -154,6 +206,21 @@ export default function UsernameScreen() {
             },
           ]}
         />
+        <View style={styles.statusContainer}>
+          {isCheckingAvailability && (
+            <ActivityIndicator size="small" color={theme.primary} />
+          )}
+          {!isCheckingAvailability && isAvailable !== null && (
+            <Text
+              style={[
+                styles.availabilityText,
+                { color: isAvailable ? theme.success : theme.error },
+              ]}
+            >
+              {isAvailable ? 'Username available' : 'Username taken'}
+            </Text>
+          )}
+        </View>
         {error && (
           <Text style={[styles.errorText, { color: theme.error }]}>
             {error}
@@ -206,6 +273,16 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
+  },
+  statusContainer: {
+    height: 24,
+    justifyContent: 'center',
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  availabilityText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   input: {
     height: 50,

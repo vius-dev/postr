@@ -21,11 +21,25 @@ CREATE TABLE IF NOT EXISTS list_members (
     list_id UUID NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    added_by UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    added_by UUID REFERENCES profiles(id) ON DELETE CASCADE,
     
     -- Constraints
     UNIQUE(list_id, user_id)
 );
+
+-- Repair: Ensure added_by exists if the table was created by a previous migration
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='list_members' AND column_name='added_by') THEN
+        ALTER TABLE list_members ADD COLUMN added_by UUID REFERENCES profiles(id) ON DELETE CASCADE;
+        -- For existing rows, we default to the list owner as the adder
+        UPDATE list_members lm
+        SET added_by = l.owner_id
+        FROM lists l
+        WHERE lm.list_id = l.id;
+        ALTER TABLE list_members ALTER COLUMN added_by SET NOT NULL;
+    END IF;
+END $$;
 
 -- Create list_subscriptions table (users following a list)
 CREATE TABLE IF NOT EXISTS list_subscriptions (
@@ -52,26 +66,31 @@ ALTER TABLE list_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE list_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Lists: Anyone can view public lists, owners can view their private lists
+DROP POLICY IF EXISTS "Public lists are viewable by everyone" ON lists;
 CREATE POLICY "Public lists are viewable by everyone"
     ON lists FOR SELECT
     USING (is_private = false OR owner_id = auth.uid());
 
 -- Lists: Only owners can create lists
+DROP POLICY IF EXISTS "Users can create their own lists" ON lists;
 CREATE POLICY "Users can create their own lists"
     ON lists FOR INSERT
     WITH CHECK (owner_id = auth.uid());
 
 -- Lists: Only owners can update their lists
+DROP POLICY IF EXISTS "Users can update their own lists" ON lists;
 CREATE POLICY "Users can update their own lists"
     ON lists FOR UPDATE
     USING (owner_id = auth.uid());
 
 -- Lists: Only owners can delete their lists
+DROP POLICY IF EXISTS "Users can delete their own lists" ON lists;
 CREATE POLICY "Users can delete their own lists"
     ON lists FOR DELETE
     USING (owner_id = auth.uid());
 
 -- List Members: Viewable if list is public or user owns the list
+DROP POLICY IF EXISTS "List members are viewable for accessible lists" ON list_members;
 CREATE POLICY "List members are viewable for accessible lists"
     ON list_members FOR SELECT
     USING (
@@ -83,6 +102,7 @@ CREATE POLICY "List members are viewable for accessible lists"
     );
 
 -- List Members: Only list owners can add members
+DROP POLICY IF EXISTS "List owners can add members" ON list_members;
 CREATE POLICY "List owners can add members"
     ON list_members FOR INSERT
     WITH CHECK (
@@ -95,6 +115,7 @@ CREATE POLICY "List owners can add members"
     );
 
 -- List Members: Only list owners can remove members
+DROP POLICY IF EXISTS "List owners can remove members" ON list_members;
 CREATE POLICY "List owners can remove members"
     ON list_members FOR DELETE
     USING (
@@ -106,6 +127,7 @@ CREATE POLICY "List owners can remove members"
     );
 
 -- List Subscriptions: Viewable if list is public or user owns/subscribes to the list
+DROP POLICY IF EXISTS "List subscriptions are viewable for accessible lists" ON list_subscriptions;
 CREATE POLICY "List subscriptions are viewable for accessible lists"
     ON list_subscriptions FOR SELECT
     USING (
@@ -118,6 +140,7 @@ CREATE POLICY "List subscriptions are viewable for accessible lists"
     );
 
 -- List Subscriptions: Users can subscribe to public lists
+DROP POLICY IF EXISTS "Users can subscribe to accessible lists" ON list_subscriptions;
 CREATE POLICY "Users can subscribe to accessible lists"
     ON list_subscriptions FOR INSERT
     WITH CHECK (
@@ -130,12 +153,26 @@ CREATE POLICY "Users can subscribe to accessible lists"
     );
 
 -- List Subscriptions: Users can unsubscribe from lists
+DROP POLICY IF EXISTS "Users can unsubscribe from lists" ON list_subscriptions;
 CREATE POLICY "Users can unsubscribe from lists"
     ON list_subscriptions FOR DELETE
     USING (subscriber_id = auth.uid());
 
 -- Auto-update timestamp trigger
-CREATE TRIGGER update_lists_updated_at
-    BEFORE UPDATE ON lists
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql' set search_path = public;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_lists_updated_at') THEN
+        CREATE TRIGGER update_lists_updated_at
+            BEFORE UPDATE ON lists
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;

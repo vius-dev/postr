@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
+import { showError } from '@/utils/toast';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/lib/api';
@@ -16,7 +17,7 @@ export default function CreateChannelScreen() {
 
   const handleCreateChannel = async () => {
     if (channelName.trim() === '') {
-      Alert.alert('Error', 'Channel name is required.');
+      showError('Your channel needs a name to get started.', 'Name Required');
       return;
     }
 
@@ -25,7 +26,7 @@ export default function CreateChannelScreen() {
       const newChannel = await api.createChannelConversation(channelName.trim(), description.trim());
       router.push(`/conversation/${newChannel.id}`);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create channel');
+      showError(error);
     } finally {
       setLoading(false);
     }

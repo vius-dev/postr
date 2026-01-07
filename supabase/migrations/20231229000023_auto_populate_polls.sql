@@ -41,7 +41,7 @@ begin
 
     return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 -- Create the trigger
 drop trigger if exists on_post_created_populate_poll on public.posts;

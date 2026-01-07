@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { showError, showSuccess } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from '@/lib/api';
@@ -120,7 +121,7 @@ const EditProfileScreen = () => {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name is required.');
+      showError('Don\'t forget to give yourself a display name!', 'Name Required');
       return;
     }
 
@@ -153,17 +154,16 @@ const EditProfileScreen = () => {
       // Emit event for global sync (Sidebar, Header, etc.)
       const { eventEmitter } = await import('@/lib/EventEmitter');
       eventEmitter.emit('profileUpdated', {
-        userId: user.id,
+        userId: user!.id,
         name: name.trim(),
         avatar: avatarUrl,
       });
 
-      Alert.alert('Success', 'Profile updated successfully.', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      showSuccess('Your profile has been updated!');
+      router.back();
     } catch (error) {
       console.error('Failed to update profile', error);
-      Alert.alert('Error', 'Failed to update profile. ' + (error instanceof Error ? error.message : ''));
+      showError(error);
     } finally {
       setIsSaving(false);
     }

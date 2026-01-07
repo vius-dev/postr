@@ -1,37 +1,82 @@
-import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import debounce from 'lodash/debounce';
+import { showError, showSuccess } from '@/utils/toast';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const router = useRouter();
   const { theme } = useTheme();
 
+  const checkAvailability = useCallback(
+    debounce(async (val: string) => {
+      if (val.length < 3) {
+        setIsUsernameAvailable(null);
+        return;
+      }
+      setIsCheckingUsername(true);
+      try {
+        const available = await api.checkUsernameAvailability(val);
+        setIsUsernameAvailable(available);
+      } catch (err) {
+        console.error('Username check failed', err);
+        setIsUsernameAvailable(null);
+      } finally {
+        setIsCheckingUsername(false);
+      }
+    }, 500),
+    []
+  );
+
+  useEffect(() => {
+    if (username.length >= 3) {
+      checkAvailability(username);
+    } else {
+      setIsUsernameAvailable(null);
+    }
+  }, [username, checkAvailability]);
+
   const handleRegister = async () => {
-    if (!email || !password || isRegistering) return;
+    if (!email || !password || !name || !username || isRegistering || isCheckingUsername) {
+      showError('Please fill in all fields', 'Missing Information');
+      return;
+    }
+
+    if (username.length < 3) {
+      showError('Your username needs to be at least 3 characters long.');
+      return;
+    }
+
+    if (isUsernameAvailable === false) {
+      showError('Sorry, that username is already claimed. Try something unique!');
+      return;
+    }
 
     if (password !== confirmPassword) {
-      alert("Passwords don't match!");
+      showError('Double check your passwords—they don\'t quite match yet.');
       return;
     }
 
     setIsRegistering(true);
     try {
-      // Derive name and username from email if not provided by separate fields 
-      // (The current UI only has email/pass, so handle_new_user trigger will derive them)
-      await api.register(email, password, '', '');
-      alert('Registration successful! Please check your email to confirm your account.');
+      await api.register(email, password, username, name);
+      showSuccess('Almost there! Please check your inbox and confirm your email first.');
       router.back();
     } catch (error: any) {
-      alert(error.message || 'Registration failed');
+      showError(error);
     } finally {
       setIsRegistering(false);
     }
@@ -60,10 +105,50 @@ export default function RegisterScreen() {
                 borderColor: theme.borderLight
               }]}
               placeholderTextColor={theme.textTertiary}
+              onChangeText={setName}
+              value={name}
+              placeholder="Display Name"
+            />
+            <View>
+              <TextInput
+                style={[styles.input, {
+                  color: theme.textPrimary,
+                  backgroundColor: theme.background,
+                  borderColor: isUsernameAvailable === false ? theme.error : theme.borderLight
+                }]}
+                placeholderTextColor={theme.textTertiary}
+                onChangeText={setUsername}
+                value={username}
+                placeholder="Username"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={styles.usernameStatus}>
+                {isCheckingUsername && (
+                  <ActivityIndicator size="small" color={theme.primary} />
+                )}
+                {username.length >= 3 && !isCheckingUsername && isUsernameAvailable !== null && (
+                  <Text style={[
+                    styles.availabilityText,
+                    { color: isUsernameAvailable ? theme.success : theme.error }
+                  ]}>
+                    {isUsernameAvailable ? 'Username available' : 'Username taken'}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <TextInput
+              style={[styles.input, {
+                color: theme.textPrimary,
+                backgroundColor: theme.background,
+                borderColor: theme.borderLight
+              }]}
+              placeholderTextColor={theme.textTertiary}
               onChangeText={setEmail}
               value={email}
               placeholder="Email"
               autoCapitalize="none"
+              keyboardType="email-address"
             />
             <TextInput
               style={[styles.input, {
@@ -141,6 +226,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 15,
     fontSize: 16,
+  },
+  usernameStatus: {
+    position: 'absolute',
+    right: 20,
+    top: 15,
+    height: 20,
+    justifyContent: 'center',
+  },
+  availabilityText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   registerButton: {
     height: 50,

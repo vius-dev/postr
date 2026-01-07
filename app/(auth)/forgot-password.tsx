@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 //import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { showError, showSuccess } from '@/utils/toast';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -16,9 +17,9 @@ export default function ForgotPasswordScreen() {
       redirectTo: 'https://vius.app/reset-password',
     });
     if (error) {
-      Alert.alert('Error', error.message);
+      showError(error);
     } else {
-      Alert.alert('Success', 'Password reset link sent to your email!');
+      showSuccess('Check your inbox! We\'ve sent you a link to reset your password.');
       router.back();
     }
   };

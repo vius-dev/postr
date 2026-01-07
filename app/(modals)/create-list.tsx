@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Switch, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { showError } from '@/utils/toast';
 import { api } from '@/lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { eventEmitter } from '@/lib/EventEmitter';
@@ -16,7 +17,7 @@ export default function CreateListModal() {
 
     const handleCreate = async () => {
         if (!name.trim()) {
-            Alert.alert('Name Required', 'Please give your list a name.');
+            showError('Please give your list a name to get started.', 'Name Required');
             return;
         }
 
@@ -31,7 +32,7 @@ export default function CreateListModal() {
             router.back();
         } catch (error) {
             console.error('Failed to create list', error);
-            Alert.alert('Error', 'Failed to create list. Please try again.');
+            showError('We couldn\'t create your list just yet. Please try again.');
         } finally {
             setIsCreating(false);
         }

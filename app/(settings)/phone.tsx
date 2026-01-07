@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '@/theme/theme';
+import { showError, showSuccess } from '@/utils/toast';
 import { useAuthStore } from '@/state/auth';
 import { api } from '@/lib/api';
 import { useRouter } from 'expo-router';
@@ -49,7 +50,7 @@ export default function PhoneScreen() {
         setSession({ ...session, user: updatedUser });
       }
 
-      Alert.alert('Success', 'Your phone number has been updated.');
+      showSuccess('Your phone number has been updated!');
       router.back();
     } catch (e: any) {
       setError(e?.message || 'An unexpected error occurred.');

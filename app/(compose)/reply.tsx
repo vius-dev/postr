@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/theme/theme';
+import { showError } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import MediaGrid from '@/components/MediaGrid';
@@ -58,7 +59,7 @@ const ReplyComposerScreen = () => {
       router.back();
     } catch (error) {
       console.error('[Reply] Submission failed:', error);
-      Alert.alert('Error', 'Failed to queue reply. Please try again.');
+      showError('We hit a snag sending your reply. We\'ll keep trying in the background!');
     }
   };
 
